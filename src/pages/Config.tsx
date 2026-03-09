@@ -11,7 +11,6 @@ import BackupPanel from "../components/config/BackupPanel";
 function Config() {
   const [searchParams] = useSearchParams();
   const {
-    selectedClientId,
     selectedClient,
     mode,
     isLoading,

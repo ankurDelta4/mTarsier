@@ -27,20 +27,6 @@ const bottomNav = [
   { to: "/about", label: "About", icon: <Info size={16} /> },
 ];
 
-function NavSection({ label, items }: { label: string; items: typeof mainNav }) {
-  return (
-    <div>
-      <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-text-muted/50">
-        {label}
-      </p>
-      <div className="space-y-0.5">
-        {items.map((item) => (
-          <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function Sidebar() {
   return (

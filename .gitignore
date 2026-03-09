@@ -30,3 +30,9 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
+src-tauri/binaries/
+
+# Certificates (never commit these)
+*.cer
+*.p12
+*.key

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "../store/themeStore";
 import { themes, type ThemeId } from "../lib/themes";
 
@@ -35,6 +37,100 @@ function ThemePreview({ id, active }: { id: ThemeId; active: boolean }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CliSection() {
+  const [installedPath, setInstalledPath] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ path: string; needs_path_update: boolean } | null>(null);
+
+  useEffect(() => {
+    invoke<string | null>("check_cli_installed").then(setInstalledPath);
+  }, []);
+
+  const handleInstall = async () => {
+    setInstalling(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await invoke<{ path: string; needs_path_update: boolean }>("install_cli");
+      setResult(res);
+      setInstalledPath(res.path);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const pathExport = `export PATH="$HOME/.local/bin:$PATH"`;
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-1">
+        CLI Tool
+      </h2>
+      <p className="text-xs text-text-muted mb-4">
+        Install <span className="font-mono text-text">tsr</span> to manage MCP servers from your terminal.
+      </p>
+
+      <div className="max-w-2xl rounded-lg border border-border bg-surface p-4 space-y-3">
+        {/* Status */}
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${installedPath ? "bg-primary" : "bg-text-muted/30"}`} />
+          <span className="text-sm">
+            {installedPath
+              ? <span>Installed at <span className="font-mono text-xs text-text-muted">{installedPath}</span></span>
+              : <span className="text-text-muted">Not installed</span>}
+          </span>
+        </div>
+
+        {/* Install button */}
+        <button
+          onClick={handleInstall}
+          disabled={installing}
+          className="px-3 py-1.5 rounded border border-primary/40 text-primary/80 text-sm
+            hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {installing ? "Installing…" : installedPath ? "Reinstall" : "Install tsr CLI"}
+        </button>
+
+        {/* Success */}
+        {result && (
+          <div className="space-y-2">
+            <p className="text-xs text-primary">
+              ✓ Installed to <span className="font-mono">{result.path}</span>
+            </p>
+            {result.needs_path_update && (
+              <div className="rounded border border-amber/30 bg-amber/5 p-3 space-y-1.5">
+                <p className="text-xs text-amber">
+                  Add <span className="font-mono">~/.local/bin</span> to your PATH to use <span className="font-mono">tsr</span> from any terminal:
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-[11px] font-mono bg-base rounded px-2 py-1 text-text-muted select-all">
+                    {pathExport}
+                  </code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(pathExport)}
+                    className="text-[10px] text-text-muted hover:text-text px-1.5 py-1 border border-border rounded transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <p className="text-[10px] text-text-muted">Add this to your <span className="font-mono">~/.zshrc</span> or <span className="font-mono">~/.bash_profile</span> and restart your terminal.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <p className="text-xs text-red-400">{error}</p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -84,6 +180,8 @@ function Settings() {
           })}
         </div>
       </section>
+
+        <CliSection />
 
       </div>
     </div>

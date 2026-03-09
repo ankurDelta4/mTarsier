@@ -7,8 +7,17 @@ license = ""
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
+default-run = "mtarsier"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "mtarsier"
+path = "src/main.rs"
+
+[[bin]]
+name = "tsr"
+path = "src/bin/tsr.rs"
 
 [lib]
 name = "app_lib"
@@ -28,3 +37,4 @@ dirs = "5"
 chrono = "0.4"
 toml = "0.8"
 tauri-plugin-dialog = "2"
+clap = { version = "4", features = ["derive"] }

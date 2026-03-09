@@ -23,6 +23,8 @@ pub fn run() {
       commands::audit::export_audit_logs,
       commands::audit::log_audit_entry,
       commands::utils::get_home_dir,
+      commands::cli::install_cli,
+      commands::cli::check_cli_installed,
       commands::io::export_tsr,
       commands::io::import_tsr,
     ])
