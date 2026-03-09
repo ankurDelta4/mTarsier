@@ -32,6 +32,9 @@ dist-ssr
 src-tauri/target/
 src-tauri/binaries/
 
+# Internal docs
+scope.md
+
 # Certificates (never commit these)
 *.cer
 *.p12
