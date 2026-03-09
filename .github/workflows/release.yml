@@ -134,21 +134,6 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-      - name: Create DMG (macOS)
-        if: matrix.platform == 'macos-latest'
-        working-directory: src-tauri
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: bash scripts/make-dmg.sh
-
-      - name: Upload DMG to release
-        if: matrix.platform == 'macos-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: src-tauri/target/release/bundle/macos/*.dmg
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ── macOS: clean up keychain ───────────────────────────────────────────
       - name: Clean up keychain
