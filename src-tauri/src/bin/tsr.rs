@@ -585,12 +585,68 @@ fn insert_server(
     server_name: &str,
     entry: serde_json::Value,
 ) -> Result<(), String> {
-    if config_format == "toml" {
-        let abs_path = expand_tilde(config_path);
-        insert_server_toml(&abs_path, config_key, server_name, &entry)
-    } else {
-        insert_server_json(config_path, config_key, server_name, entry)
+    match config_format {
+        "toml" => {
+            let abs_path = expand_tilde(config_path);
+            insert_server_toml(&abs_path, config_key, server_name, &entry)
+        }
+        "json-opencode" => insert_server_opencode(config_path, config_key, server_name, entry),
+        _ => insert_server_json(config_path, config_key, server_name, entry),
     }
+}
+
+fn insert_server_opencode(
+    config_path: &str,
+    config_key: &str,
+    server_name: &str,
+    entry: serde_json::Value,
+) -> Result<(), String> {
+    let abs_path = expand_tilde(config_path);
+
+    if let Some(parent) = abs_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    let content = std::fs::read_to_string(&abs_path).unwrap_or_else(|_| "{}".to_string());
+    let mut root: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("JSON parse error: {}", e))?;
+
+    let resolved_key = expand_config_key(config_key);
+    let servers = ensure_json_path(&mut root, &resolved_key);
+
+    let opencode_entry = if let Some(url) = entry.get("url").and_then(|v| v.as_str()) {
+        serde_json::json!({ "type": "remote", "url": url, "enabled": true })
+    } else {
+        let cmd = entry.get("command").and_then(|v| v.as_str()).unwrap_or("");
+        let args = entry
+            .get("args")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let mut command_arr = vec![serde_json::json!(cmd)];
+        command_arr.extend(args);
+        let mut e = serde_json::json!({
+            "type": "local",
+            "command": command_arr,
+            "enabled": true,
+        });
+        if let Some(env_obj) = entry.get("env").and_then(|v| v.as_object()) {
+            if !env_obj.is_empty() {
+                e["environment"] = serde_json::Value::Object(env_obj.clone());
+            }
+        }
+        e
+    };
+
+    servers
+        .as_object_mut()
+        .ok_or_else(|| format!("'{}' is not a JSON object", config_key))?
+        .insert(server_name.to_string(), opencode_entry);
+
+    let new_content =
+        serde_json::to_string_pretty(&root).map_err(|e| format!("Serialize error: {}", e))?;
+    app_lib::commands::config::write_raw_config(config_path.to_string(), new_content)
 }
 
 fn insert_server_json(

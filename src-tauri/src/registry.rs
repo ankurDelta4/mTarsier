@@ -89,6 +89,17 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("codex"),
     },
     ClientDef {
+        id: "opencode",
+        name: "OpenCode",
+        client_type: "IDE",
+        config_path: Some("~/.config/opencode/opencode.json"),
+        config_path_win: Some("%APPDATA%\\opencode\\opencode.json"),
+        config_key: "mcp",
+        config_format: "json-opencode",
+        detection_kind: "cli_binary",
+        detection_value: Some("opencode"),
+    },
+    ClientDef {
         id: "gemini-cli",
         name: "Gemini CLI",
         client_type: "CLI",

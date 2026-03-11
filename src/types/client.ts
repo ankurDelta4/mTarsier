@@ -17,7 +17,7 @@ export interface ClientMeta {
   configPathWin: string | null;
   configPathLinux: string | null;
   configKey: string;
-  configFormat: "json" | "yaml" | "toml";
+  configFormat: "json" | "yaml" | "toml" | "json-opencode";
   detection: DetectionMethod;
   supportedTransports: TransportType[];
   /** True when the config file contains non-MCP data (e.g. ~/.claude.json).

@@ -109,6 +109,66 @@ fn set_toml_path(value: &mut toml::Value, keys: &[&str], new_value: toml::Value)
     }
 }
 
+// ─── OpenCode helpers ──────────────────────────────────────────────────────────
+
+fn convert_servers_to_opencode(servers: &serde_json::Value) -> serde_json::Value {
+    let Some(obj) = servers.as_object() else {
+        return serde_json::json!({});
+    };
+    let converted: serde_json::Map<String, serde_json::Value> = obj
+        .iter()
+        .map(|(name, entry)| {
+            let opencode_entry = if let Some(url) = entry.get("url").and_then(|v| v.as_str()) {
+                serde_json::json!({ "type": "remote", "url": url, "enabled": true })
+            } else {
+                // command may arrive as a string (standard format) or array (raw OpenCode
+                // format round-tripped through extractServersFromJson in the UI)
+                let (cmd, args) = if let Some(arr) =
+                    entry.get("command").and_then(|v| v.as_array())
+                {
+                    let mut strs = arr.iter().filter_map(|v| v.as_str());
+                    let cmd = strs.next().unwrap_or("").to_string();
+                    let rest: Vec<serde_json::Value> =
+                        strs.map(|s| serde_json::json!(s)).collect();
+                    (cmd, rest)
+                } else {
+                    let cmd = entry
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let rest = entry
+                        .get("args")
+                        .and_then(|v| v.as_array())
+                        .cloned()
+                        .unwrap_or_default();
+                    (cmd, rest)
+                };
+                let mut command_arr = vec![serde_json::json!(cmd)];
+                command_arr.extend(args);
+                let mut e = serde_json::json!({
+                    "type": "local",
+                    "command": command_arr,
+                    "enabled": true,
+                });
+                // env key in standard format, environment key in raw OpenCode format
+                let env_obj = entry
+                    .get("env")
+                    .and_then(|v| v.as_object())
+                    .or_else(|| entry.get("environment").and_then(|v| v.as_object()));
+                if let Some(env_obj) = env_obj {
+                    if !env_obj.is_empty() {
+                        e["environment"] = serde_json::Value::Object(env_obj.clone());
+                    }
+                }
+                e
+            };
+            (name.clone(), opencode_entry)
+        })
+        .collect();
+    serde_json::Value::Object(converted)
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 /// Parse raw TOML content and return the servers section as a JSON string.
@@ -146,6 +206,25 @@ pub fn write_client_config(request: WriteConfigRequest) -> Result<(), String> {
 
             let output = toml::to_string_pretty(&toml_val)
                 .map_err(|e| format!("Failed to serialize TOML: {}", e))?;
+            std::fs::write(&path, output)
+                .map_err(|e| format!("Failed to write config: {}", e))?;
+        }
+        "json-opencode" => {
+            let mut root: serde_json::Value = if path.exists() {
+                let content = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("Failed to read config: {}", e))?;
+                serde_json::from_str(&content)
+                    .map_err(|e| format!("Failed to parse config: {}", e))?
+            } else {
+                serde_json::json!({})
+            };
+
+            let converted = convert_servers_to_opencode(&request.servers);
+            let target = ensure_json_path(&mut root, &resolved_key);
+            *target = converted;
+
+            let output = serde_json::to_string_pretty(&root)
+                .map_err(|e| format!("Failed to serialize: {}", e))?;
             std::fs::write(&path, output)
                 .map_err(|e| format!("Failed to write config: {}", e))?;
         }

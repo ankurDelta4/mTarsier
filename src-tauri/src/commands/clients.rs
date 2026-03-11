@@ -143,6 +143,47 @@ pub fn read_mcp_servers(
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
 
+    if config_format.as_deref() == Some("json-opencode") {
+        let json: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let resolved_key = expand_config_key(&config_key);
+        let servers = navigate_json_key(&json, &resolved_key)
+            .ok_or_else(|| format!("Key '{}' not found", resolved_key))?;
+        let obj = servers
+            .as_object()
+            .ok_or_else(|| format!("'{}' is not an object", config_key))?;
+
+        let entries = obj
+            .iter()
+            .map(|(name, val)| {
+                let (command, args) = match val.get("command").and_then(|v| v.as_array()) {
+                    Some(arr) => {
+                        let mut strs =
+                            arr.iter().filter_map(|v| v.as_str().map(String::from));
+                        let cmd = strs.next();
+                        let rest: Vec<String> = strs.collect();
+                        (cmd, if rest.is_empty() { None } else { Some(rest) })
+                    }
+                    None => (None, None),
+                };
+                let env = val.get("environment").and_then(|v| v.as_object()).map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect()
+                });
+                let url = val.get("url").and_then(|v| v.as_str()).map(String::from);
+                McpServerEntry {
+                    name: name.clone(),
+                    command,
+                    args,
+                    env,
+                    url,
+                }
+            })
+            .collect();
+        return Ok(entries);
+    }
+
     if config_format.as_deref() == Some("toml") {
         let toml_val: toml::Value =
             toml::from_str(&content).map_err(|e| format!("Failed to parse TOML: {}", e))?;
