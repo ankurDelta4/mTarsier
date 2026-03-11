@@ -1,22 +1,23 @@
 # mTarsier
 
-**Full visibility for your MCP ecosystem.**
+[![mTarsier — MCP Management, without the chaos.](https://raw.githubusercontent.com/mcp360/mTarsier/main/src/assets/mtarsier-readme-banner.svg)](https://mcp360.ai/mtarsier)
 
-mTarsier is an open-source desktop app that makes adopting the [Model Context Protocol](https://modelcontextprotocol.io) easy. It detects every MCP client you have installed, lets you edit their configs in one place, and helps you discover and install new MCP servers — all without touching a config file manually.
+**MCP Management, without the chaos.**
 
-Named after the Tarsier — a primate with 180° vision that sees everything around it.
+mTarsier is an open-source platform for managing MCP servers and clients — so Claude, Cursor, VS Code and every AI tool you use always has the right MCP connections, without the chaos.
 
-> Official desktop companion to [MCP360](https://mcp360.ai) — a unified MCP gateway for 100+ tools.
+> Named after the Tarsier — a primate with 180° vision that sees everything around it.
 
 ---
 
 ## Features
 
-- **Dashboard** — overview of all detected clients and installed servers
-- **Client detection** — automatically detects which MCP clients are installed on your machine
-- **Config editor** — read and write config files for every client with syntax highlighting and JSON validation
+- **Unified Dashboard** — all MCP servers across every client in one view
+- **Client Detection** — auto-detects Claude Desktop, Cursor, Windsurf, VS Code, and more
+- **Config Editor** — read/write config files with syntax highlighting and live JSON validation
 - **Marketplace** — browse and install MCP servers into any client in a few clicks
-- **CLI tool** — `tsr` command for managing MCP servers from your terminal
+- **CLI Tool** — `tsr` command for terminal-based management
+- **Auto-backup** — backs up configs before every change with one-click rollback
 - **Multi-theme** — dark biopunk, light, and system themes
 
 ---
@@ -31,10 +32,13 @@ Named after the Tarsier — a primate with 180° vision that sees everything aro
 | GitHub Copilot (VS Code) | IDE | `~/Library/Application Support/Code/User/mcp.json` |
 | Cursor | IDE | `~/.cursor/mcp.json` |
 | Windsurf | IDE | `~/.codeium/windsurf/mcp_config.json` |
+| VS Code | IDE | `~/Library/Application Support/Code/User/mcp.json` |
+| Antigravity | IDE | `~/.antigravity/mcp.json` |
 | Claude Code | CLI | `~/.claude.json` |
 | GitHub Copilot CLI | CLI | `~/.copilot/mcp-config.json` |
 | Gemini CLI | CLI | `~/.gemini/settings.json` |
 | Codex CLI | CLI | `~/.codex/config.toml` |
+| Open Code | CLI | `~/.opencode/config.json` |
 | Claude (web) | Web | Remote only |
 | ChatGPT (web) | Web | Remote only |
 
@@ -42,13 +46,14 @@ Named after the Tarsier — a primate with 180° vision that sees everything aro
 
 ## Installation
 
-### Download
+Grab the latest release from the [Releases](https://github.com/mcp360/mTarsier/releases/latest) page:
 
-Grab the latest release for your platform from the [Releases](https://github.com/mcp360/mtarsier/releases) page:
-
-- **macOS** — `.dmg`
-- **Windows** — `.msi`
-- **Linux** — `.AppImage` / `.deb`
+| Platform | File |
+|---|---|
+| macOS Apple Silicon | `mTarsier_*_aarch64.dmg` |
+| macOS Intel | `mTarsier_*_x64.dmg` |
+| Windows | `mTarsier_*_x64-setup.exe` |
+| Linux | `mTarsier_*_amd64.AppImage` / `mTarsier_*_amd64.deb` |
 
 ### Homebrew (coming soon)
 
@@ -60,22 +65,22 @@ brew install mcp360/tap/tsr
 
 ## CLI — `tsr`
 
-mTarsier ships a CLI tool called `tsr` for managing MCP servers from your terminal.
-
-**Install it from the app:** Settings → CLI Tool → Install tsr CLI
-
-Or build from source (see below) — the binary ends up at `src-tauri/target/debug/tsr`.
+Install from the app: **Settings → CLI Tool → Install tsr CLI**
 
 ```bash
-tsr --help
+$ tsr list
+  filesystem      → Claude Desktop, Cursor, Windsurf
+  brave-search    → Claude Desktop
+  github          → Cursor, Windsurf
 
-tsr list                        # list all MCP servers across configured clients
-tsr clients                     # list detected MCP clients
-tsr config <client-id>          # show config path for a client
-tsr config <client-id> --edit   # open config in $EDITOR
-tsr add <name> <url>            # add a new MCP server
-tsr ping <name>                 # ping a server
-tsr install <mcp-name>          # install an MCP from the marketplace
+$ tsr clients
+  ✓  claude-desktop   ~/Library/Application Support/Claude/...
+  ✓  cursor           ~/.cursor/mcp.json
+  ✓  windsurf         ~/.codeium/windsurf/mcp_config.json
+
+$ tsr install brave-search   # install from marketplace
+$ tsr config cursor --edit   # open config in $EDITOR
+$ tsr ping <name>            # ping a server
 ```
 
 > Full command implementations are in progress.
@@ -94,24 +99,16 @@ tsr install <mcp-name>          # install an MCP from the marketplace
 ### Steps
 
 ```bash
-# Clone
-git clone https://github.com/mcp360/mtarsier.git
-cd mtarsier
-
-# Install frontend dependencies
+git clone https://github.com/mcp360/mTarsier.git
+cd mTarsier
 pnpm install
 
 # Prepare the tsr sidecar binary (required once before dev)
 cd src-tauri && bash scripts/prepare-sidecar.sh && cd ..
 
-# Run in development
-pnpm tauri dev
-
-# Build for production
-pnpm tauri build
+pnpm tauri dev    # development
+pnpm tauri build  # production
 ```
-
-The `prepare-sidecar.sh` script builds the `tsr` binary and copies it to `src-tauri/binaries/tsr-{target-triple}` so Tauri can bundle it with the app. It runs automatically during `tauri build` via `beforeBundleCommand`.
 
 ---
 
@@ -131,12 +128,9 @@ The `prepare-sidecar.sh` script builds the `tsr` binary and copies it to `src-ta
 
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a large pull request.
+Contributions are welcome. Please open an issue before submitting a large pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-```bash
-# After making changes, verify the build
-pnpm tauri build
-```
+**Maintainers:** [@0fficialRohit](https://x.com/0fficialRohit) · [@rege_dev](https://x.com/rege_dev)
 
 ---
 
@@ -148,5 +142,4 @@ MIT — see [LICENSE](LICENSE)
 
 ## Conservation
 
-Named after the Tarsier, one of the world's smallest primates. Tarsiers are endangered.
-We support conservation efforts — [learn more](https://www.iucnredlist.org/search?query=tarsius).
+Tarsier, one of the world's smallest and most endangered primates — [learn more](https://www.iucnredlist.org/search?query=tarsius).
