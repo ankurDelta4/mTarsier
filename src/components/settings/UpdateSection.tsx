@@ -85,8 +85,8 @@ export function UpdateSection() {
           <p className="text-xs text-primary">You're on the latest version.</p>
         )}
 
-        {/* Update available */}
-        {state === "available" && updateInfo && (
+        {/* Update available / installing */}
+        {(state === "available" || state === "installing") && updateInfo && (
           <div className="space-y-3">
             <div className="rounded border border-cyan/30 bg-cyan/5 p-3 space-y-2">
               <p className="text-xs text-cyan font-medium">
