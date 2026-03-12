@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::process;
 
 use app_lib::commands::clients::{detect_installed_clients, read_mcp_servers, DetectionRequest};
+use app_lib::commands::server::{read_store, write_store, ServerEntry};
 use app_lib::commands::utils::{ensure_json_path, expand_config_key, expand_tilde};
 use app_lib::marketplace::{find_server, MARKETPLACE};
 use app_lib::registry::{find_client, platform_config_path, REGISTRY};
@@ -72,6 +73,18 @@ enum Commands {
         #[arg(long = "param", num_args = 1)]
         params: Vec<String>,
     },
+    /// Disable a server (removes from client config, saves to mTarsier store)
+    Disable {
+        name: String,
+        #[arg(long)]
+        client: String,
+    },
+    /// Enable a previously-disabled server (restores to client config)
+    Enable {
+        name: String,
+        #[arg(long)]
+        client: String,
+    },
 }
 
 fn main() {
@@ -99,6 +112,8 @@ fn main() {
             client,
             params,
         }) => cmd_install(name, client, params),
+        Some(Commands::Disable { name, client }) => cmd_disable(name, client),
+        Some(Commands::Enable { name, client }) => cmd_enable(name, client),
     }
 }
 
@@ -223,10 +238,18 @@ fn cmd_list(client: Option<String>, json: bool) {
             })
             .collect();
 
+        let disabled_json: Vec<serde_json::Value> = read_store(c.id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, e)| !e.enabled)
+            .map(|(name, e)| serde_json::json!({ "name": name, "config": e.config }))
+            .collect();
+
         output.push(serde_json::json!({
             "client": c.name,
             "client_id": c.id,
             "servers": servers_json,
+            "disabled_servers": disabled_json,
         }));
     }
 
@@ -249,8 +272,10 @@ fn cmd_list(client: Option<String>, json: bool) {
     for client_data in &output {
         let client_name = client_data["client"].as_str().unwrap_or("");
         let servers = client_data["servers"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+        let disabled = client_data["disabled_servers"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+
         println!("\n── {} ──", client_name);
-        if servers.is_empty() {
+        if servers.is_empty() && disabled.is_empty() {
             println!("  (none)");
         } else {
             println!("  {:<30} {}", "Name", "Command / URL");
@@ -274,8 +299,166 @@ fn cmd_list(client: Option<String>, json: bool) {
                 };
                 println!("  {:<30} {}", name, cmd_str);
             }
+            for d in disabled {
+                let name = d["name"].as_str().unwrap_or("?");
+                let cfg = &d["config"];
+                let cmd_str = if let Some(url) = cfg["url"].as_str() {
+                    format!("url: {}", url)
+                } else {
+                    let cmd = cfg["command"].as_str().unwrap_or("?");
+                    let args_str = cfg["args"]
+                        .as_array()
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_default();
+                    format!("{} {}", cmd, args_str)
+                };
+                println!("  {:<30} {} [disabled]", name, cmd_str);
+            }
         }
     }
+}
+
+fn cmd_disable(name: String, client: String) {
+    let client_def = match find_client(&client) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client);
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client);
+            process::exit(1);
+        }
+    };
+
+    // Read current servers to extract the server config
+    let servers = match read_mcp_servers(
+        path.to_string(),
+        client_def.config_key.to_string(),
+        Some(client_def.config_format.to_string()),
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error reading config: {}", e);
+            process::exit(1);
+        }
+    };
+
+    let server = match servers.iter().find(|s| s.name == name) {
+        Some(s) => s,
+        None => {
+            eprintln!("Server '{}' not found in {}", name, client_def.name);
+            process::exit(1);
+        }
+    };
+
+    // Build the config value from the server struct fields
+    let mut config = serde_json::json!({});
+    if let Some(ref cmd) = server.command {
+        config["command"] = serde_json::json!(cmd);
+    }
+    if let Some(ref args) = server.args {
+        if !args.is_empty() {
+            config["args"] = serde_json::json!(args);
+        }
+    }
+    if let Some(ref url) = server.url {
+        config["url"] = serde_json::json!(url);
+    }
+    if let Some(ref env) = server.env {
+        if !env.is_empty() {
+            config["env"] = serde_json::json!(env);
+        }
+    }
+
+    // Update mTarsier store
+    let mut store = read_store(client_def.id).unwrap_or_default();
+    store.insert(name.clone(), ServerEntry {
+        enabled: false,
+        externally_removed: None,
+        config,
+    });
+    if let Err(e) = write_store(client_def.id, &store) {
+        eprintln!("Error writing mTarsier store: {}", e);
+        process::exit(1);
+    }
+
+    // Remove from client config
+    match remove_server(path, client_def.config_key, client_def.config_format, &name) {
+        Ok(_) => println!("✓ Disabled {} (removed from {})", name, client_def.name),
+        Err(e) => {
+            eprintln!("Error removing from client config: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_enable(name: String, client: String) {
+    let client_def = match find_client(&client) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client);
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client);
+            process::exit(1);
+        }
+    };
+
+    let mut store = read_store(client_def.id).unwrap_or_default();
+    let entry = match store.get(&name) {
+        Some(e) if !e.enabled => e.clone(),
+        Some(_) => {
+            eprintln!("Server '{}' is already enabled in {}", name, client_def.name);
+            process::exit(1);
+        }
+        None => {
+            eprintln!("Server '{}' not found in mTarsier store for {}", name, client_def.name);
+            process::exit(1);
+        }
+    };
+
+    // Re-insert into client config
+    match insert_server(
+        path,
+        client_def.config_key,
+        client_def.config_format,
+        &name,
+        entry.config.clone(),
+    ) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Error adding to client config: {}", e);
+            process::exit(1);
+        }
+    }
+
+    // Update store to enabled
+    store.insert(name.clone(), ServerEntry {
+        enabled: true,
+        externally_removed: None,
+        config: entry.config,
+    });
+    if let Err(e) = write_store(client_def.id, &store) {
+        eprintln!("Error writing mTarsier store: {}", e);
+        process::exit(1);
+    }
+
+    println!("✓ Enabled {} (added back to {})", name, client_def.name);
 }
 
 fn cmd_config(client_id: String, edit: bool, show: bool) {

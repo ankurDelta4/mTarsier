@@ -5,6 +5,13 @@ import { useClientStore } from "./clientStore";
 import type { BackupEntry, RestoreDiff, PendingRestore } from "../types/config";
 import type { ClientMeta } from "../types/client";
 
+interface ServerEntry {
+  enabled: boolean;
+  externally_removed?: boolean;
+  config: Record<string, unknown>;
+}
+type MtarsierStore = Record<string, ServerEntry>;
+
 // TODO: migrate to @tauri-apps/plugin-os (platform() → "windows"|"linux"|"macos")
 // navigator.platform is deprecated per MDN but still works in all current Tauri WebView backends.
 const nav = typeof navigator !== "undefined" ? navigator.platform : "";
@@ -58,6 +65,8 @@ interface ConfigStore {
   rawContent: string;
   originalContent: string;
   servers: Record<string, unknown>;
+  disabledServers: Record<string, unknown>;
+  removedServers: Record<string, unknown>;
   isDirty: boolean;
   isLoading: boolean;
   isSaving: boolean;
@@ -91,6 +100,9 @@ interface ConfigStore {
   addServer: (name: string, data: Record<string, unknown>) => void;
   updateServer: (name: string, data: Record<string, unknown>) => void;
   removeServer: (name: string) => void;
+  toggleServer: (name: string) => void;
+  restoreRemovedServer: (name: string) => void;
+  dismissRemovedServer: (name: string) => void;
   createDefaultConfig: () => Promise<void>;
   setScope: (scope: "user" | string) => void;
 }
@@ -156,6 +168,19 @@ function extractServers(content: string, configKey: string, effectiveKey?: strin
   }
 }
 
+/**
+ * Build the mTarsier store key for a client + scope.
+ * Per-project Claude Code scopes can be absolute paths (e.g. "/Users/john/myproject").
+ * Path separators must be sanitized so the key is safe to use as a flat filename component.
+ */
+function buildStoreKey(id: string, scope: string): string {
+  if (scope && scope !== "user") {
+    const safeScope = scope.replace(/[/\\]/g, "-");
+    return `${id}_${safeScope}`;
+  }
+  return id;
+}
+
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   selectedClientId: null,
   selectedClient: null,
@@ -163,6 +188,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   rawContent: "",
   originalContent: "",
   servers: {},
+  disabledServers: {},
+  removedServers: {},
   isDirty: false,
   isLoading: false,
   isSaving: false,
@@ -236,12 +263,51 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const effectiveKey = getEffectiveConfigKey(client, activeScope);
 
     set({ isLoading: true, error: null, validationError: null });
+
+    const loadMtarsierStore = async (clientServers: Record<string, unknown>) => {
+      const key = buildStoreKey(clientId, activeScope);
+      const store = await invoke<MtarsierStore>("read_mtarsier_store", { storeKey: key })
+        .catch(() => ({} as MtarsierStore));
+
+      // Adopt servers in client config not yet in our store
+      for (const [name, config] of Object.entries(clientServers)) {
+        if (!(name in store)) {
+          store[name] = { enabled: true, config: config as Record<string, unknown> };
+        }
+      }
+
+      // Apply sync rules to existing entries
+      for (const [name, entry] of Object.entries(store)) {
+        const inClient = name in clientServers;
+        if (entry.enabled && !entry.externally_removed && !inClient) {
+          store[name] = { ...entry, externally_removed: true };
+        } else if (entry.enabled && entry.externally_removed && inClient) {
+          store[name] = { ...entry, externally_removed: undefined, config: clientServers[name] as Record<string, unknown> };
+        } else if (!entry.enabled && inClient) {
+          store[name] = { ...entry, enabled: true };
+        }
+      }
+
+      await invoke("write_mtarsier_store", { storeKey: key, store }).catch(() => {});
+
+      const servers: Record<string, unknown> = {};
+      const disabledServers: Record<string, unknown> = {};
+      const removedServers: Record<string, unknown> = {};
+      for (const [name, entry] of Object.entries(store)) {
+        if (entry.externally_removed) removedServers[name] = entry.config;
+        else if (!entry.enabled) disabledServers[name] = entry.config;
+        else servers[name] = entry.config;
+      }
+
+      set({ servers, disabledServers, removedServers });
+    };
+
     try {
       const content = await invoke<string>("get_client_config", {
         configPath: getEffectiveConfigPath(client),
       });
 
-      let servers: Record<string, unknown>;
+      let rawServers: Record<string, unknown>;
       let rawContent: string;
       if (client.configFormat === "toml") {
         // Parse TOML on the Rust side; raw editor always shows servers as JSON
@@ -249,14 +315,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           content,
           configKey: client.configKey,
         });
-        servers = JSON.parse(jsonStr);
-        rawContent = JSON.stringify(servers, null, 2);
+        rawServers = JSON.parse(jsonStr);
+        rawContent = JSON.stringify(rawServers, null, 2);
       } else {
-        servers = extractServers(content, client.configKey, effectiveKey);
+        rawServers = extractServers(content, client.configKey, effectiveKey);
         // For shared config files (e.g. Claude Code's ~/.claude.json),
         // only show the MCP servers section in the raw editor
         rawContent = isSharedConfigFile(client)
-          ? JSON.stringify(servers, null, 2)
+          ? JSON.stringify(rawServers, null, 2)
           : content;
       }
 
@@ -275,34 +341,55 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       set({
         rawContent,
         originalContent: content,
-        servers,
+        servers: rawServers,
+        disabledServers: {},
+        removedServers: {},
         isDirty: false,
         isLoading: false,
         selectedClient: client,
         selectedClientId: clientId,
         projectScopes,
       });
+
+      await loadMtarsierStore(rawServers);
       get().loadBackups();
     } catch {
-      // Config file doesn't exist yet
+      // Config file doesn't exist yet — still load mTarsier store so disabled/removed servers surface
       set({
         rawContent: "",
         originalContent: "",
         servers: {},
+        disabledServers: {},
+        removedServers: {},
         isDirty: false,
         isLoading: false,
         selectedClient: client,
         selectedClientId: clientId,
       });
+      await loadMtarsierStore({});
       get().loadBackups();
     }
   },
 
   saveConfig: async () => {
-    const { selectedClient, mode, rawContent, servers, activeScope } = get();
+    const { selectedClient, mode, rawContent, servers, disabledServers, removedServers, activeScope } = get();
     if (!selectedClient || !selectedClient.configPath) return;
 
     const effectiveKey = getEffectiveConfigKey(selectedClient, activeScope);
+
+    const saveMtarsierStore = async () => {
+      const key = buildStoreKey(selectedClient.id, activeScope);
+      // Use get() to read current state — saves in edit mode update servers before this runs
+      const { servers: s, disabledServers: ds, removedServers: rs } = get();
+      const store: MtarsierStore = {};
+      for (const [name, config] of Object.entries(s))
+        store[name] = { enabled: true, config: config as Record<string, unknown> };
+      for (const [name, config] of Object.entries(ds))
+        store[name] = { enabled: false, config: config as Record<string, unknown> };
+      for (const [name, config] of Object.entries(rs))
+        store[name] = { enabled: true, externally_removed: true, config: config as Record<string, unknown> };
+      await invoke("write_mtarsier_store", { storeKey: key, store }).catch(() => {});
+    };
 
     set({ isSaving: true, error: null });
     try {
@@ -365,6 +452,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           isSaving: false,
         });
       }
+      await saveMtarsierStore();
       get().loadBackups();
       useClientStore.getState().detectAll();
     } catch (err) {
@@ -426,7 +514,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   previewRestore: async (filename) => {
-    const { selectedClient, servers, activeScope, backups } = get();
+    const { selectedClient, servers, disabledServers, activeScope, backups } = get();
     if (!selectedClient || !selectedClient.configPath) return;
 
     const effectiveKey = getEffectiveConfigKey(selectedClient, activeScope);
@@ -448,7 +536,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         backupServers = extractServers(content, selectedClient.configKey, effectiveKey);
       }
 
-      const currentKeys = new Set(Object.keys(servers));
+      // Include disabled servers in "current" so they don't show as added/removed in the diff
+      const allCurrentServers = { ...servers, ...disabledServers };
+      const currentKeys = new Set(Object.keys(allCurrentServers));
       const backupKeys = new Set(Object.keys(backupServers));
 
       const diff: RestoreDiff = {
@@ -457,12 +547,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         changed: [...backupKeys].filter(
           (k) =>
             currentKeys.has(k) &&
-            JSON.stringify(servers[k]) !== JSON.stringify(backupServers[k])
+            JSON.stringify(allCurrentServers[k]) !== JSON.stringify(backupServers[k])
         ),
         unchanged: [...backupKeys].filter(
           (k) =>
             currentKeys.has(k) &&
-            JSON.stringify(servers[k]) === JSON.stringify(backupServers[k])
+            JSON.stringify(allCurrentServers[k]) === JSON.stringify(backupServers[k])
         ),
       };
 
@@ -510,26 +600,59 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   addServer: (name, data) => {
-    const { servers } = get();
+    const { servers, disabledServers, removedServers } = get();
+    // If this name exists in disabled/removed, promote it to active (import / re-add takes precedence)
+    const newDisabled = { ...disabledServers };
+    const newRemoved = { ...removedServers };
+    delete newDisabled[name];
+    delete newRemoved[name];
     set({
       servers: { ...servers, [name]: data },
+      disabledServers: newDisabled,
+      removedServers: newRemoved,
       isDirty: true,
     });
   },
 
   updateServer: (name, data) => {
-    const { servers } = get();
-    set({
-      servers: { ...servers, [name]: data },
-      isDirty: true,
-    });
+    const { servers, disabledServers } = get();
+    if (name in disabledServers) {
+      set({ disabledServers: { ...disabledServers, [name]: data }, isDirty: true });
+    } else {
+      set({ servers: { ...servers, [name]: data }, isDirty: true });
+    }
   },
 
   removeServer: (name) => {
-    const { servers } = get();
+    const { servers, disabledServers } = get();
     const newServers = { ...servers };
+    const newDisabled = { ...disabledServers };
     delete newServers[name];
-    set({ servers: newServers, isDirty: true });
+    delete newDisabled[name];
+    set({ servers: newServers, disabledServers: newDisabled, isDirty: true });
+  },
+
+  toggleServer: (name) => {
+    const { servers, disabledServers } = get();
+    if (name in servers) {
+      const { [name]: entry, ...rest } = servers as Record<string, unknown>;
+      set({ servers: rest, disabledServers: { ...disabledServers, [name]: entry }, isDirty: true });
+    } else if (name in disabledServers) {
+      const { [name]: entry, ...rest } = disabledServers as Record<string, unknown>;
+      set({ servers: { ...servers, [name]: entry }, disabledServers: rest, isDirty: true });
+    }
+  },
+
+  restoreRemovedServer: (name) => {
+    const { servers, removedServers } = get();
+    const { [name]: entry, ...rest } = removedServers as Record<string, unknown>;
+    set({ servers: { ...servers, [name]: entry }, removedServers: rest, isDirty: true });
+  },
+
+  dismissRemovedServer: (name) => {
+    const { removedServers } = get();
+    const { [name]: _dropped, ...rest } = removedServers as Record<string, unknown>;
+    set({ removedServers: rest, isDirty: true });
   },
 
   createDefaultConfig: async () => {

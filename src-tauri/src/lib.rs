@@ -32,6 +32,8 @@ pub fn run() {
       commands::cli::check_cli_installed,
       commands::io::export_tsr,
       commands::io::import_tsr,
+      commands::server::read_mtarsier_store,
+      commands::server::write_mtarsier_store,
       commands::updater::check_for_update,
       commands::updater::install_update,
     ])

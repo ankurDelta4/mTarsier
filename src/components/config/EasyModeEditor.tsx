@@ -9,8 +9,12 @@ import ImportDialog from "./ImportDialog";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function EasyModeEditor() {
-  const { servers, selectedClient, addServer, removeServer, updateServer, saveConfig } =
-    useConfigStore();
+  const {
+    servers, disabledServers, removedServers,
+    selectedClient, addServer, removeServer, updateServer,
+    toggleServer, restoreRemovedServer, dismissRemovedServer,
+    saveConfig,
+  } = useConfigStore();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingServer, setEditingServer] = useState<string | null>(null);
@@ -18,6 +22,8 @@ function EasyModeEditor() {
   const [exportStatus, setExportStatus] = useState<"idle" | "saving" | "done">("idle");
 
   const serverEntries = Object.entries(servers);
+  const disabledEntries = Object.entries(disabledServers);
+  const removedEntries = Object.entries(removedServers);
 
   async function autoSave() {
     setSaveStatus("saving");
@@ -45,6 +51,21 @@ function EasyModeEditor() {
 
   const handleDelete = async (name: string) => {
     removeServer(name);
+    await autoSave();
+  };
+
+  const handleToggle = async (name: string) => {
+    toggleServer(name);
+    await autoSave();
+  };
+
+  const handleRestore = async (name: string) => {
+    restoreRemovedServer(name);
+    await autoSave();
+  };
+
+  const handleDismiss = async (name: string) => {
+    dismissRemovedServer(name);
     await autoSave();
   };
 
@@ -96,7 +117,7 @@ function EasyModeEditor() {
 
   return (
     <div className="flex-1 overflow-y-auto p-5">
-      {serverEntries.length === 0 ? (
+      {serverEntries.length === 0 && disabledEntries.length === 0 && removedEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
           <p className="text-text-muted text-sm">No MCP servers configured</p>
           <div className="flex gap-2">
@@ -157,6 +178,7 @@ function EasyModeEditor() {
               data={data as Record<string, unknown>}
               onEdit={() => setEditingServer(name)}
               onDelete={() => handleDelete(name)}
+              onToggle={() => handleToggle(name)}
             />
           ))}
 
@@ -166,6 +188,41 @@ function EasyModeEditor() {
           >
             + Add Server
           </button>
+
+          {disabledEntries.length > 0 && (
+            <div className="mt-4 border-t border-border pt-3 space-y-2">
+              <p className="text-[11px] text-text-muted uppercase tracking-wide">Disabled</p>
+              {disabledEntries.map(([name, data]) => (
+                <ServerCard
+                  key={name}
+                  name={name}
+                  data={data as Record<string, unknown>}
+                  disabled
+                  onToggle={() => handleToggle(name)}
+                  onEdit={() => setEditingServer(name)}
+                  onDelete={() => handleDelete(name)}
+                />
+              ))}
+            </div>
+          )}
+
+          {removedEntries.length > 0 && (
+            <div className="mt-4 border-t border-amber-500/20 pt-3 space-y-2">
+              <p className="text-[11px] text-amber-500/70 uppercase tracking-wide">Removed externally</p>
+              {removedEntries.map(([name, data]) => (
+                <ServerCard
+                  key={name}
+                  name={name}
+                  data={data as Record<string, unknown>}
+                  removed
+                  onRestore={() => handleRestore(name)}
+                  onDismiss={() => handleDismiss(name)}
+                  onEdit={() => {}}
+                  onDelete={() => {}}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -187,7 +244,7 @@ function EasyModeEditor() {
       {editingServer && (
         <EditServerDialog
           name={editingServer}
-          data={servers[editingServer] as Record<string, unknown>}
+          data={(servers[editingServer] ?? disabledServers[editingServer]) as Record<string, unknown>}
           supportedTransports={selectedClient?.supportedTransports ?? []}
           onSave={handleUpdate}
           onClose={() => setEditingServer(null)}

@@ -90,8 +90,28 @@ interface Props {
   onImported?: () => void; // called after servers are added so caller can auto-save
 }
 
+type ConflictState = "active" | "disabled" | "removed";
+
+function getConflict(
+  name: string,
+  servers: Record<string, unknown>,
+  disabledServers: Record<string, unknown>,
+  removedServers: Record<string, unknown>,
+): ConflictState | null {
+  if (name in disabledServers) return "disabled";
+  if (name in removedServers) return "removed";
+  if (name in servers) return "active";
+  return null;
+}
+
+const conflictBadge: Record<ConflictState, { label: string; className: string }> = {
+  active:   { label: "already active",     className: "bg-primary/15 text-primary" },
+  disabled: { label: "currently disabled", className: "bg-surface-overlay text-text-muted" },
+  removed:  { label: "removed externally", className: "bg-amber-500/20 text-amber-400" },
+};
+
 function ImportDialog({ onClose, onImported }: Props) {
-  const { selectedClientId, addServer } = useConfigStore();
+  const { selectedClientId, addServer, servers, disabledServers, removedServers } = useConfigStore();
   const detectedClients = useClientStore((s) => s.clients);
   const [source, setSource] = useState<"file" | "client">("client");
   const [clientId, setClientId] = useState("");
@@ -326,6 +346,8 @@ function ImportDialog({ onClose, onImported }: Props) {
             <div className="overflow-y-auto flex-1 p-3 space-y-1.5">
               {serverEntries.map(([name, data]) => {
                 const summary = serverSummary(data);
+                const conflict = getConflict(name, servers, disabledServers, removedServers);
+                const badge = conflict ? conflictBadge[conflict] : null;
                 return (
                   <label
                     key={name}
@@ -337,8 +359,15 @@ function ImportDialog({ onClose, onImported }: Props) {
                       onChange={() => toggle(name)}
                       className="mt-0.5 accent-primary flex-shrink-0"
                     />
-                    <div className="min-w-0">
-                      <p className="text-xs font-mono font-medium text-text truncate">{name}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-mono font-medium text-text truncate">{name}</p>
+                        {badge && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        )}
+                      </div>
                       {summary && (
                         <p className="text-[11px] text-text-muted font-mono truncate mt-0.5">{summary}</p>
                       )}
