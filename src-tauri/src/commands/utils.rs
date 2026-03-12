@@ -1,12 +1,31 @@
 use std::path::PathBuf;
 
 pub fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(rest);
+    #[cfg(target_os = "windows")]
+    {
+        // Expand %APPDATA%, %LOCALAPPDATA%, %USERPROFILE% etc. before tilde check.
+        let mut s = path.to_string();
+        for var in &["LOCALAPPDATA", "APPDATA", "USERPROFILE", "PROGRAMFILES"] {
+            if let Ok(val) = std::env::var(var) {
+                s = s.replace(&format!("%{}%", var), &val);
+            }
         }
+        if let Some(rest) = s.strip_prefix("~/") {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(rest);
+            }
+        }
+        return PathBuf::from(s);
     }
-    PathBuf::from(path)
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(rest) = path.strip_prefix("~/") {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(rest);
+            }
+        }
+        PathBuf::from(path)
+    }
 }
 
 pub fn navigate_json_key<'a>(

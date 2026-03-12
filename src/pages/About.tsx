@@ -87,7 +87,6 @@ function About() {
         <div className="rounded-lg border border-border bg-surface-overlay p-4 text-center space-y-1.5">
           <p className="text-xs text-text-muted">
             Named after the Tarsier — one of the world's smallest primates.
-            Tarsiers are endangered. We support conservation efforts.
           </p>
           <button
             onClick={() => openLink("https://www.iucnredlist.org/search?query=tarsius")}

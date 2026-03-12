@@ -43,7 +43,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
               : c.detection.kind === "vscode_extension"
                 ? c.detection.id
                 : undefined,
+        detection_value_win:
+          c.detection.kind === "app_bundle" ? c.detection.pathWin : undefined,
+        detection_value_linux:
+          c.detection.kind === "app_bundle" ? c.detection.pathLinux : undefined,
         config_path: c.configPath,
+        config_path_win: c.configPathWin,
+        config_path_linux: c.configPathLinux,
         config_key: c.configKey,
       }));
 

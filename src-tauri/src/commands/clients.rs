@@ -8,7 +8,15 @@ pub struct DetectionRequest {
     pub client_id: String,
     pub detection_kind: String,
     pub detection_value: Option<String>,
+    #[serde(default)]
+    pub detection_value_win: Option<String>,
+    #[serde(default)]
+    pub detection_value_linux: Option<String>,
     pub config_path: Option<String>,
+    #[serde(default)]
+    pub config_path_win: Option<String>,
+    #[serde(default)]
+    pub config_path_linux: Option<String>,
     pub config_key: Option<String>,
 }
 
@@ -29,22 +37,89 @@ pub struct McpServerEntry {
     pub url: Option<String>,
 }
 
+
+/// Probe known binary directories that may not be in PATH when a GUI app launches.
+/// On macOS/Linux: Homebrew, Claude native installer, npm globals, bun, cargo, volta, nix.
+/// On Windows: npm global, bun, cargo, volta, Scoop, Chocolatey, winget.
+fn probe_binary_dirs(name: &str) -> bool {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return false,
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        // npm global installs on Windows create .cmd shims (not .exe).
+        // Also check bare name and .exe for non-npm tools.
+        let name_exe = format!("{}.exe", name);
+        let name_cmd = format!("{}.cmd", name);
+        let name_ps1 = format!("{}.ps1", name);
+        let candidates: &[std::path::PathBuf] = &[
+            home.join("AppData\\Roaming\\npm"),
+            home.join("AppData\\Local\\Programs\\nodejs"),
+            home.join(".bun\\bin"),
+            home.join(".cargo\\bin"),
+            home.join(".volta\\bin"),
+            home.join(".deno\\bin"),
+            home.join("scoop\\shims"),
+            std::path::PathBuf::from("C:\\ProgramData\\chocolatey\\bin"),
+            std::path::PathBuf::from("C:\\Program Files\\nodejs"),
+        ];
+        return candidates.iter().any(|dir| {
+            dir.join(name).exists()
+                || dir.join(&name_exe).exists()
+                || dir.join(&name_cmd).exists()
+                || dir.join(&name_ps1).exists()
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let candidates: &[std::path::PathBuf] = &[
+            "/usr/local/bin".into(),
+            "/opt/homebrew/bin".into(),
+            "/usr/bin".into(),
+            "/snap/bin".into(),         // Ubuntu snap packages
+            "/usr/local/sbin".into(),
+            home.join(".local/bin"),
+            home.join(".npm-global/bin"),
+            home.join(".bun/bin"),
+            home.join(".cargo/bin"),
+            home.join(".volta/bin"),
+            home.join(".deno/bin"),
+            home.join(".nix-profile/bin"),
+        ];
+        return candidates.iter().any(|dir| dir.join(name).exists());
+    }
+}
+
 fn check_installed(kind: &str, value: Option<&str>) -> bool {
     match kind {
         "app_bundle" => {
+            // expand_tilde handles %VAR% on Windows and ~/ on all platforms.
             if let Some(path) = value {
-                std::path::Path::new(path).exists()
+                expand_tilde(path).exists()
             } else {
                 false
             }
         }
         "cli_binary" => {
             if let Some(name) = value {
-                Command::new("which")
+                // Primary: use `where` on Windows, `which` on Unix.
+                // (fix-path-env-rs restores the shell PATH on macOS/Linux at startup.)
+                #[cfg(target_os = "windows")]
+                let lookup_cmd = "where";
+                #[cfg(not(target_os = "windows"))]
+                let lookup_cmd = "which";
+
+                let found_via_lookup = Command::new(lookup_cmd)
                     .arg(name)
                     .output()
                     .map(|o| o.status.success())
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+
+                // Fallback: probe known install locations directly.
+                found_via_lookup || probe_binary_dirs(name)
             } else {
                 false
             }
@@ -98,14 +173,34 @@ pub fn detect_installed_clients(clients: Vec<DetectionRequest>) -> Vec<Detection
     clients
         .iter()
         .map(|req| {
-            let installed = check_installed(&req.detection_kind, req.detection_value.as_deref());
-            let config_exists = req
-                .config_path
-                .as_ref()
+            // Pick platform-specific detection value for app_bundle; CLI names are the same everywhere.
+            #[cfg(target_os = "windows")]
+            let detection_value = req.detection_value_win.as_deref()
+                .or(req.detection_value.as_deref());
+            #[cfg(target_os = "linux")]
+            let detection_value = req.detection_value_linux.as_deref()
+                .or(req.detection_value.as_deref());
+            #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+            let detection_value = req.detection_value.as_deref();
+
+            let installed = check_installed(&req.detection_kind, detection_value);
+
+            // Resolve platform-appropriate config path.
+            #[cfg(target_os = "windows")]
+            let resolved_config_path = req.config_path_win.as_deref()
+                .or(req.config_path.as_deref());
+            #[cfg(target_os = "linux")]
+            let resolved_config_path = req.config_path_linux.as_deref()
+                .or(req.config_path.as_deref());
+            #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+            let resolved_config_path = req.config_path.as_deref();
+
+            // expand_tilde handles %VAR% on Windows, so no separate expansion needed.
+            let config_exists = resolved_config_path
                 .map(|p| expand_tilde(p).exists())
                 .unwrap_or(false);
             let server_count = if config_exists {
-                if let (Some(cp), Some(ck)) = (&req.config_path, &req.config_key) {
+                if let (Some(cp), Some(ck)) = (resolved_config_path, req.config_key.as_deref()) {
                     if !ck.is_empty() {
                         count_servers(cp, ck)
                     } else {

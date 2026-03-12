@@ -5,6 +5,19 @@ import { useClientStore } from "./clientStore";
 import type { BackupEntry, RestoreDiff, PendingRestore } from "../types/config";
 import type { ClientMeta } from "../types/client";
 
+// TODO: migrate to @tauri-apps/plugin-os (platform() → "windows"|"linux"|"macos")
+// navigator.platform is deprecated per MDN but still works in all current Tauri WebView backends.
+const nav = typeof navigator !== "undefined" ? navigator.platform : "";
+const IS_WINDOWS = nav.toLowerCase().startsWith("win");
+const IS_LINUX = nav.toLowerCase().startsWith("linux");
+
+/** Returns the config file path appropriate for the current OS. */
+function getEffectiveConfigPath(client: ClientMeta): string | null {
+  if (IS_WINDOWS && client.configPathWin) return client.configPathWin;
+  if (IS_LINUX && client.configPathLinux) return client.configPathLinux;
+  return client.configPath;
+}
+
 let _homeDir: string | null = null;
 
 async function getHomeDir(): Promise<string> {
@@ -225,7 +238,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set({ isLoading: true, error: null, validationError: null });
     try {
       const content = await invoke<string>("get_client_config", {
-        configPath: client.configPath,
+        configPath: getEffectiveConfigPath(client),
       });
 
       let servers: Record<string, unknown>;
@@ -252,7 +265,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       if (hasScopedConfig(client) && client.configPath) {
         try {
           projectScopes = await invoke<ProjectScope[]>("list_claude_code_scopes", {
-            configPath: client.configPath,
+            configPath: getEffectiveConfigPath(client),
           });
         } catch {
           // ignore
@@ -296,7 +309,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       // Create backup first if config exists
       try {
         await invoke("create_backup", {
-          configPath: selectedClient.configPath,
+          configPath: getEffectiveConfigPath(selectedClient),
           clientId: selectedClient.id,
         });
       } catch {
@@ -309,7 +322,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           const editedServers = JSON.parse(rawContent);
           await invoke("write_client_config", {
             request: {
-              config_path: selectedClient.configPath,
+              config_path: getEffectiveConfigPath(selectedClient),
               config_key: effectiveKey,
               config_format: selectedClient.configFormat,
               servers: editedServers,
@@ -322,7 +335,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           });
         } else {
           await invoke("write_raw_config", {
-            configPath: selectedClient.configPath,
+            configPath: getEffectiveConfigPath(selectedClient),
             content: rawContent,
           });
           const newServers = extractServers(rawContent, selectedClient.configKey, effectiveKey);
@@ -336,7 +349,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       } else {
         await invoke("write_client_config", {
           request: {
-            config_path: selectedClient.configPath,
+            config_path: getEffectiveConfigPath(selectedClient),
             config_key: effectiveKey,
             config_format: selectedClient.configFormat,
             servers,
@@ -404,7 +417,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       await invoke("restore_backup", {
         clientId: selectedClient.id,
         filename,
-        configPath: selectedClient.configPath,
+        configPath: getEffectiveConfigPath(selectedClient),
       });
       await get().loadConfig(selectedClient.id);
     } catch (err) {
@@ -528,7 +541,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const content = await invoke<string>("create_default_config", {
-        configPath: selectedClient.configPath,
+        configPath: getEffectiveConfigPath(selectedClient),
         configKey: effectiveKey,
         configFormat: selectedClient.configFormat,
       });

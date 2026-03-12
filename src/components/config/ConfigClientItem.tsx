@@ -4,7 +4,7 @@ import type { ClientMeta } from "../../types/client";
 interface Props {
   client: ClientMeta;
   isSelected: boolean;
-  configExists: boolean;
+  installed: boolean;
   onSelect: () => void;
 }
 
@@ -14,7 +14,7 @@ const typeBadgeColors: Record<string, string> = {
   CLI: "bg-surface-overlay text-text-muted",
 };
 
-function ConfigClientItem({ client, isSelected, configExists, onSelect }: Props) {
+function ConfigClientItem({ client, isSelected, installed, onSelect }: Props) {
   const [dotHovered, setDotHovered] = useState(false);
 
   return (
@@ -29,7 +29,7 @@ function ConfigClientItem({ client, isSelected, configExists, onSelect }: Props)
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{client.name}</span>
-          {configExists && (
+          {installed && (
             <span
               className="relative flex-shrink-0 p-1 -m-1"
               onMouseEnter={() => setDotHovered(true)}

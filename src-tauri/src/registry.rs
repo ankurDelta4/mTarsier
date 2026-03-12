@@ -4,10 +4,15 @@ pub struct ClientDef {
     pub client_type: &'static str,
     pub config_path: Option<&'static str>,
     pub config_path_win: Option<&'static str>,
+    pub config_path_linux: Option<&'static str>,
     pub config_key: &'static str,
     pub config_format: &'static str,
     pub detection_kind: &'static str,
     pub detection_value: Option<&'static str>,
+    /// Windows-specific detection path for app_bundle clients (expands %LOCALAPPDATA% etc.)
+    pub detection_value_win: Option<&'static str>,
+    /// Linux-specific detection path for app_bundle clients
+    pub detection_value_linux: Option<&'static str>,
 }
 
 pub static REGISTRY: &[ClientDef] = &[
@@ -17,10 +22,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "Desktop",
         config_path: Some("~/Library/Application Support/Claude/claude_desktop_config.json"),
         config_path_win: Some("%APPDATA%\\Claude\\claude_desktop_config.json"),
+        config_path_linux: None, // Not supported on Linux
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Claude.app"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe"),
+        detection_value_linux: None,
     },
     ClientDef {
         id: "claude-code",
@@ -28,10 +36,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "CLI",
         config_path: Some("~/.claude.json"),
         config_path_win: Some("%USERPROFILE%\\.claude.json"),
+        config_path_linux: None, // Same as config_path
         config_key: "projects.{HOME}.mcpServers",
         config_format: "json",
         detection_kind: "cli_binary",
         detection_value: Some("claude"),
+        detection_value_win: None, // binary name same everywhere; probe handles .cmd
+        detection_value_linux: None,
     },
     ClientDef {
         id: "claude-web",
@@ -39,10 +50,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "Web",
         config_path: None,
         config_path_win: None,
+        config_path_linux: None,
         config_key: "",
         config_format: "json",
         detection_kind: "none",
         detection_value: None,
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "chatgpt-desktop",
@@ -50,10 +64,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "Desktop",
         config_path: None,
         config_path_win: None,
+        config_path_linux: None,
         config_key: "",
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/ChatGPT.app"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\ChatGPT.exe"),
+        detection_value_linux: None,
     },
     ClientDef {
         id: "chatgpt",
@@ -61,10 +78,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "Web",
         config_path: None,
         config_path_win: None,
+        config_path_linux: None,
         config_key: "",
         config_format: "json",
         detection_kind: "none",
         detection_value: None,
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "codex-app",
@@ -72,10 +92,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "Desktop",
         config_path: Some("~/.codex/config.toml"),
         config_path_win: Some("%USERPROFILE%\\.codex\\config.toml"),
+        config_path_linux: None, // Same as config_path
         config_key: "mcp_servers",
         config_format: "toml",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Codex.app"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Codex\\Codex.exe"),
+        detection_value_linux: None,
     },
     ClientDef {
         id: "codex-cli",
@@ -83,10 +106,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "CLI",
         config_path: Some("~/.codex/config.toml"),
         config_path_win: Some("%USERPROFILE%\\.codex\\config.toml"),
+        config_path_linux: None,
         config_key: "mcp_servers",
         config_format: "toml",
         detection_kind: "cli_binary",
         detection_value: Some("codex"),
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "opencode",
@@ -94,10 +120,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "IDE",
         config_path: Some("~/.config/opencode/opencode.json"),
         config_path_win: Some("%APPDATA%\\opencode\\opencode.json"),
+        config_path_linux: None, // Same as config_path
         config_key: "mcp",
         config_format: "json-opencode",
         detection_kind: "cli_binary",
         detection_value: Some("opencode"),
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "gemini-cli",
@@ -105,10 +134,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "CLI",
         config_path: Some("~/.gemini/settings.json"),
         config_path_win: Some("%USERPROFILE%\\.gemini\\settings.json"),
+        config_path_linux: None,
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "cli_binary",
         detection_value: Some("gemini"),
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "antigravity",
@@ -116,10 +148,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "IDE",
         config_path: Some("~/.gemini/antigravity/mcp_config.json"),
         config_path_win: Some("%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json"),
+        config_path_linux: None,
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Antigravity.app"),
+        detection_value_win: None,
+        detection_value_linux: Some("/usr/bin/antigravity"),
     },
     ClientDef {
         id: "github-copilot",
@@ -127,10 +162,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "IDE",
         config_path: Some("~/Library/Application Support/Code/User/mcp.json"),
         config_path_win: Some("%APPDATA%\\Code\\User\\mcp.json"),
+        config_path_linux: Some("~/.config/Code/User/mcp.json"),
         config_key: "servers",
         config_format: "json",
         detection_kind: "vscode_extension",
         detection_value: Some("github.copilot-chat"),
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "github-copilot-cli",
@@ -138,10 +176,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "CLI",
         config_path: Some("~/.copilot/mcp-config.json"),
         config_path_win: Some("%USERPROFILE%\\.copilot\\mcp-config.json"),
+        config_path_linux: None,
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "cli_binary",
         detection_value: Some("copilot"),
+        detection_value_win: None,
+        detection_value_linux: None,
     },
     ClientDef {
         id: "cursor",
@@ -149,10 +190,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "IDE",
         config_path: Some("~/.cursor/mcp.json"),
         config_path_win: Some("%USERPROFILE%\\.cursor\\mcp.json"),
+        config_path_linux: None, // Same as config_path
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Cursor.app"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"),
+        detection_value_linux: Some("/usr/bin/cursor"),
     },
     ClientDef {
         id: "windsurf",
@@ -160,10 +204,13 @@ pub static REGISTRY: &[ClientDef] = &[
         client_type: "IDE",
         config_path: Some("~/.codeium/windsurf/mcp_config.json"),
         config_path_win: Some("%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json"),
+        config_path_linux: None,
         config_key: "mcpServers",
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Windsurf.app"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe"),
+        detection_value_linux: Some("/usr/bin/windsurf"),
     },
 ];
 
@@ -174,6 +221,8 @@ pub fn find_client(id: &str) -> Option<&'static ClientDef> {
 pub fn platform_config_path(c: &ClientDef) -> Option<&'static str> {
     #[cfg(windows)]
     return c.config_path_win;
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    return c.config_path_linux.or(c.config_path);
+    #[cfg(not(any(windows, target_os = "linux")))]
     return c.config_path;
 }

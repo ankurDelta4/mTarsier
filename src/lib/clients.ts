@@ -12,7 +12,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.config/Claude/claude_desktop_config.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Claude.app" },
+    detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe" },
     supportedTransports: ["stdio", "remote-mcp"],
   },
   {
@@ -70,7 +70,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: null,
     configKey: "",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/ChatGPT.app" },
+    detection: { kind: "app_bundle", path: "/Applications/ChatGPT.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\ChatGPT.exe" },
     supportedTransports: ["sse", "streamable-http"],
     setupSteps: [
       {
@@ -96,7 +96,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configKey: "mcp_servers",
     configFormat: "toml",
     isSharedFile: true,
-    detection: { kind: "app_bundle", path: "/Applications/Codex.app" },
+    detection: { kind: "app_bundle", path: "/Applications/Codex.app", pathWin: "%LOCALAPPDATA%\\Programs\\Codex\\Codex.exe" },
     supportedTransports: ["stdio", "remote-mcp"],
   },
   {
@@ -163,7 +163,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.cursor/mcp.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Cursor.app" },
+    detection: { kind: "app_bundle", path: "/Applications/Cursor.app", pathWin: "%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe", pathLinux: "/usr/bin/cursor" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
   },
   {
@@ -176,7 +176,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.codeium/windsurf/mcp_config.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Windsurf.app" },
+    detection: { kind: "app_bundle", path: "/Applications/Windsurf.app", pathWin: "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe", pathLinux: "/usr/bin/windsurf" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
   },
   {
@@ -215,7 +215,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.gemini/antigravity/mcp_config.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Antigravity.app" },
+    detection: { kind: "app_bundle", path: "/Applications/Antigravity.app", pathLinux: "/usr/bin/antigravity" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
   },
   {

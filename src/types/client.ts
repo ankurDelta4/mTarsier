@@ -1,7 +1,7 @@
 export type ClientType = "Desktop" | "IDE" | "Web" | "CLI" | "Framework";
 
 export type DetectionMethod =
-  | { kind: "app_bundle"; path: string }
+  | { kind: "app_bundle"; path: string; pathWin?: string; pathLinux?: string }
   | { kind: "cli_binary"; name: string }
   | { kind: "vscode_extension"; id: string }
   | { kind: "none" };
@@ -40,7 +40,11 @@ export interface DetectionRequest {
   client_id: string;
   detection_kind: string;
   detection_value?: string;
+  detection_value_win?: string;
+  detection_value_linux?: string;
   config_path: string | null;
+  config_path_win?: string | null;
+  config_path_linux?: string | null;
   config_key: string | null;
 }
 

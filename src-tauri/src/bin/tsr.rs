@@ -111,7 +111,11 @@ fn cmd_clients(json: bool) {
             client_id: c.id.to_string(),
             detection_kind: c.detection_kind.to_string(),
             detection_value: c.detection_value.map(String::from),
+            detection_value_win: c.detection_value_win.map(String::from),
+            detection_value_linux: c.detection_value_linux.map(String::from),
             config_path: platform_config_path(c).map(String::from),
+            config_path_win: c.config_path_win.map(String::from),
+            config_path_linux: c.config_path_linux.map(String::from),
             config_key: Some(c.config_key.to_string()),
         })
         .collect();

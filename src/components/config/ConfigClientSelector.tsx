@@ -39,7 +39,7 @@ function ConfigClientSelector() {
                     key={client.id}
                     client={client}
                     isSelected={selectedClientId === client.id}
-                    configExists={state?.configExists ?? false}
+                    installed={state?.installed ?? false}
                     onSelect={() => setSelectedClient(client.id)}
                   />
                 );
