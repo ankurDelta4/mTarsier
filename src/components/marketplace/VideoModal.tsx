@@ -63,7 +63,7 @@ function VideoModal({ serverName, videos, onClose }: Props) {
           <div className={`bg-black flex items-center justify-center min-w-0 ${isShort ? "flex-none w-[315px]" : "flex-1"}`}>
             <iframe
               key={active.id}
-              src={`https://www.youtube-nocookie.com/embed/${active.id}?autoplay=1&rel=0&modestbranding=1&color=white`}
+              src={`https://mcp360.ai/mtarsier/yt.html?v=${active.id}`}
               title={active.title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
