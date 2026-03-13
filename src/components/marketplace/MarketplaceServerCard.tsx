@@ -62,9 +62,10 @@ interface Props {
   installedIn: string[];
   onInstall: () => void;
   onUninstall: () => void;
+  onWatchVideos?: () => void;
 }
 
-function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUninstall }: Props) {
+function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUninstall, onWatchVideos }: Props) {
   const styles = CATEGORY_STYLES[server.category];
   const isInstalled = installedIn.length > 0;
   const transport = transportLabel(server);
@@ -170,6 +171,19 @@ function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUni
         <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono flex-shrink-0 text-text-muted border-border">
           {transport}
         </span>
+
+        {server.videos && server.videos.length > 0 && (
+          <button
+            onClick={onWatchVideos}
+            title={`Watch ${server.videos.length} tutorial video${server.videos.length !== 1 ? "s" : ""}`}
+            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-red-500/30 text-red-400/60 hover:border-red-500/50 hover:text-red-400 transition-colors focus:outline-none flex-shrink-0"
+          >
+            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+            </svg>
+            <span>{server.videos.length}</span>
+          </button>
+        )}
 
         <button
           onClick={onInstall}

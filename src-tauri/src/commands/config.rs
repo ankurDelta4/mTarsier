@@ -169,6 +169,36 @@ fn convert_servers_to_opencode(servers: &serde_json::Value) -> serde_json::Value
     serde_json::Value::Object(converted)
 }
 
+/// Ensure every server entry that has a `url` but no `command` and no `type`
+/// gets `"type": "http"` injected. Claude Code (and other clients) require
+/// the type discriminator to recognise HTTP-transport servers.
+fn normalize_mcp_servers(servers: serde_json::Value) -> serde_json::Value {
+    let Some(obj) = servers.as_object() else {
+        return servers;
+    };
+    let normalized: serde_json::Map<String, serde_json::Value> = obj
+        .iter()
+        .map(|(name, entry)| {
+            let entry = if let Some(map) = entry.as_object() {
+                if map.contains_key("url")
+                    && !map.contains_key("command")
+                    && !map.contains_key("type")
+                {
+                    let mut m = map.clone();
+                    m.insert("type".to_string(), serde_json::json!("http"));
+                    serde_json::Value::Object(m)
+                } else {
+                    entry.clone()
+                }
+            } else {
+                entry.clone()
+            };
+            (name.clone(), entry)
+        })
+        .collect();
+    serde_json::Value::Object(normalized)
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 /// Parse raw TOML content and return the servers section as a JSON string.
@@ -240,7 +270,7 @@ pub fn write_client_config(request: WriteConfigRequest) -> Result<(), String> {
             };
 
             let target = ensure_json_path(&mut root, &resolved_key);
-            *target = request.servers;
+            *target = normalize_mcp_servers(request.servers);
 
             let output = serde_json::to_string_pretty(&root)
                 .map_err(|e| format!("Failed to serialize config: {}", e))?;

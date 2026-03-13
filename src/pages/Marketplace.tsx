@@ -3,17 +3,12 @@ import { open } from "@tauri-apps/plugin-shell";
 import { cn } from "../lib/utils";
 import { useClientStore } from "../store/clientStore";
 import { useMarketplaceInstalls } from "../hooks/useMarketplaceInstalls";
-import {
-  MARKETPLACE_SERVERS,
-  CATEGORIES,
-  type McpCategory,
-  type MarketplaceServer,
-} from "../data/marketplace";
+import { useMarketplace } from "../hooks/useMarketplace";
+import { type McpCategory, type MarketplaceServer } from "../data/marketplace";
 import MarketplaceServerCard from "../components/marketplace/MarketplaceServerCard";
 import InstallMcpDialog from "../components/marketplace/InstallMcpDialog";
 import UninstallMcpDialog from "../components/marketplace/UninstallMcpDialog";
-
-const FEATURED = MARKETPLACE_SERVERS.filter((s) => s.featured);
+import VideoModal from "../components/marketplace/VideoModal";
 
 function Marketplace() {
   const [search, setSearch] = useState("");
@@ -21,12 +16,20 @@ function Marketplace() {
   const [featuredOffset, setFeaturedOffset] = useState(0);
   const [installing, setInstalling] = useState<MarketplaceServer | null>(null);
   const [uninstalling, setUninstalling] = useState<MarketplaceServer | null>(null);
+  const [watchingVideos, setWatchingVideos] = useState<MarketplaceServer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { clients } = useClientStore();
+  const { servers: MARKETPLACE_SERVERS, categories: CATEGORIES } = useMarketplace();
   const installMap = useMarketplaceInstalls(clients, refreshKey);
+
+  const FEATURED_ORDER = ["playwright", "mcp360", "excalidraw", "memory"];
+  const FEATURED = FEATURED_ORDER.flatMap((id) => {
+    const s = MARKETPLACE_SERVERS.find((s) => s.id === id && s.featured);
+    return s ? [s] : [];
+  });
 
   const isFiltering = search.trim() !== "" || activeCategory !== "All";
 
@@ -150,6 +153,7 @@ function Marketplace() {
                 installedIn={installMap.get(server.id) ?? []}
                 onInstall={() => setInstalling(server)}
                 onUninstall={() => setUninstalling(server)}
+                onWatchVideos={() => setWatchingVideos(server)}
               />
             ))}
           </div>
@@ -209,6 +213,7 @@ function Marketplace() {
                 installedIn={installMap.get(server.id) ?? []}
                 onInstall={() => setInstalling(server)}
                 onUninstall={() => setUninstalling(server)}
+                onWatchVideos={() => setWatchingVideos(server)}
               />
             ))}
           </div>
@@ -242,6 +247,15 @@ function Marketplace() {
           installedIn={installMap.get(installing.id) ?? []}
           onClose={() => setInstalling(null)}
           onSuccess={handleSuccess}
+        />
+      )}
+
+      {/* Video modal */}
+      {watchingVideos?.videos && watchingVideos.videos.length > 0 && (
+        <VideoModal
+          serverName={watchingVideos.name}
+          videos={watchingVideos.videos}
+          onClose={() => setWatchingVideos(null)}
         />
       )}
 
