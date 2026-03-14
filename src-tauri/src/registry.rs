@@ -143,6 +143,20 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_linux: None,
     },
     ClientDef {
+        id: "mcpporter",
+        name: "MCPorter (OpenClaw)",
+        client_type: "CLI",
+        config_path: Some("~/.mcporter/mcporter.json"),
+        config_path_win: Some("%USERPROFILE%\\.mcporter\\mcporter.json"),
+        config_path_linux: None, // Same as config_path
+        config_key: "mcpServers",
+        config_format: "json",
+        detection_kind: "cli_binary",
+        detection_value: Some("mcporter"),
+        detection_value_win: None,
+        detection_value_linux: None,
+    },
+    ClientDef {
         id: "antigravity",
         name: "Antigravity",
         client_type: "IDE",

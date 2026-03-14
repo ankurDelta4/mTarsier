@@ -152,6 +152,22 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     detection: { kind: "cli_binary", name: "gemini" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
   },
+  // ── OpenClaw ─────────────────────────────────────────────────────────────
+  {
+    id: "mcpporter",
+    name: "MCPorter (OpenClaw)",
+    type: "CLI",
+    docsUrl: "https://github.com/steipete/mcporter",
+    configPath: "~/.mcporter/mcporter.json",
+    configPathWin: "%USERPROFILE%\\.mcporter\\mcporter.json",
+    configPathLinux: "~/.mcporter/mcporter.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    isSharedFile: true,
+    detection: { kind: "cli_binary", name: "mcporter" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+
   // ── IDEs ─────────────────────────────────────────────────────────────────
   {
     id: "cursor",
