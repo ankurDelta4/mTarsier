@@ -1,6 +1,6 @@
 [package]
 name = "mtarsier"
-version = "0.2.4"
+version = "0.2.5"
 description = "mTarsier - Desktop app for managing MCP servers"
 authors = ["mTarsier"]
 license = ""
