@@ -35,6 +35,10 @@ pub struct McpServerEntry {
     pub args: Option<Vec<String>>,
     pub env: Option<std::collections::HashMap<String, String>>,
     pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headers: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<serde_json::Value>,
 }
 
 
@@ -273,6 +277,8 @@ pub fn read_mcp_servers(
                     args,
                     env,
                     url,
+                    headers: None,
+                    auth: None,
                 }
             })
             .collect();
@@ -318,6 +324,8 @@ pub fn read_mcp_servers(
                     args,
                     env,
                     url,
+                    headers: None,
+                    auth: None,
                 }
             })
             .collect();
@@ -354,12 +362,16 @@ pub fn read_mcp_servers(
                 })
             });
             let url = val.get("url").and_then(|v| v.as_str()).map(String::from);
+            let headers = val.get("headers").cloned();
+            let auth = val.get("auth").cloned();
             McpServerEntry {
                 name: name.clone(),
                 command,
                 args,
                 env,
                 url,
+                headers,
+                auth,
             }
         })
         .collect();

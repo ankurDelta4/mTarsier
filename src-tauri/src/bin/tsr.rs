@@ -44,6 +44,18 @@ enum Commands {
         args: Vec<String>,
         #[arg(long)]
         url: Option<String>,
+        /// Bearer token for HTTP servers (written as Authorization header)
+        #[arg(long)]
+        bearer_token: Option<String>,
+        /// Custom header in "Key: Value" format (repeatable)
+        #[arg(long = "header", num_args = 1)]
+        headers: Vec<String>,
+        /// Environment variable in KEY=VALUE format (repeatable)
+        #[arg(long = "env", num_args = 1)]
+        env: Vec<String>,
+        /// Overwrite if a server with this name already exists
+        #[arg(long)]
+        force: bool,
     },
     /// Remove a server from a client's config
     Remove {
@@ -57,11 +69,13 @@ enum Commands {
         #[arg(long)]
         client: Option<String>,
     },
-    /// Show or edit a client's config file
+    /// Show or edit a client's config file (default: print path)
     Config {
         client_id: String,
+        /// Open config in $EDITOR
         #[arg(long)]
         edit: bool,
+        /// Print the config file contents to stdout
         #[arg(long)]
         show: bool,
     },
@@ -103,7 +117,11 @@ fn main() {
             command,
             args,
             url,
-        }) => cmd_add(name, client, command, args, url),
+            bearer_token,
+            headers,
+            env,
+            force,
+        }) => cmd_add(name, client, command, args, url, bearer_token, headers, env, force),
         Some(Commands::Remove { name, client }) => cmd_remove(name, client),
         Some(Commands::Ping { name, client }) => cmd_ping(name, client),
         Some(Commands::Config {
@@ -233,12 +251,22 @@ fn cmd_list(client: Option<String>, json: bool) {
         let servers_json: Vec<serde_json::Value> = servers
             .iter()
             .map(|s| {
-                serde_json::json!({
+                let mut obj = serde_json::json!({
                     "name": s.name,
                     "command": s.command,
                     "args": s.args,
                     "url": s.url,
-                })
+                });
+                if let Some(ref env) = s.env {
+                    obj["env"] = serde_json::json!(env);
+                }
+                if let Some(ref headers) = s.headers {
+                    obj["headers"] = headers.clone();
+                }
+                if let Some(ref auth) = s.auth {
+                    obj["auth"] = auth.clone();
+                }
+                obj
             })
             .collect();
 
@@ -299,7 +327,7 @@ fn cmd_list(client: Option<String>, json: bool) {
                                 .join(" ")
                         })
                         .unwrap_or_default();
-                    format!("{} {}", cmd, args_str)
+                    if args_str.is_empty() { cmd.to_string() } else { format!("{} {}", cmd, args_str) }
                 };
                 println!("  {:<30} {}", name, cmd_str);
             }
@@ -319,7 +347,7 @@ fn cmd_list(client: Option<String>, json: bool) {
                                 .join(" ")
                         })
                         .unwrap_or_default();
-                    format!("{} {}", cmd, args_str)
+                    if args_str.is_empty() { cmd.to_string() } else { format!("{} {}", cmd, args_str) }
                 };
                 println!("  {:<30} {} [disabled]", name, cmd_str);
             }
@@ -383,6 +411,25 @@ fn cmd_disable(name: String, client: String) {
             config["env"] = serde_json::json!(env);
         }
     }
+    if let Some(ref headers) = server.headers {
+        config["headers"] = headers.clone();
+    }
+    if let Some(ref auth) = server.auth {
+        config["auth"] = auth.clone();
+    }
+
+    // Remove from client config first — if this fails, nothing is written to the store
+    match remove_server(path, client_def.config_key, client_def.config_format, &name) {
+        Ok(true) => {}
+        Ok(false) => {
+            eprintln!("Server '{}' not found when removing from {}", name, client_def.name);
+            process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Error removing from client config: {}", e);
+            process::exit(1);
+        }
+    }
 
     // Update mTarsier store
     let mut store = read_store(client_def.id).unwrap_or_default();
@@ -396,14 +443,7 @@ fn cmd_disable(name: String, client: String) {
         process::exit(1);
     }
 
-    // Remove from client config
-    match remove_server(path, client_def.config_key, client_def.config_format, &name) {
-        Ok(_) => println!("✓ Disabled {} (removed from {})", name, client_def.name),
-        Err(e) => {
-            eprintln!("Error removing from client config: {}", e);
-            process::exit(1);
-        }
-    }
+    println!("✓ Disabled {} (removed from {})", name, client_def.name);
 }
 
 fn cmd_enable(name: String, client: String) {
@@ -519,9 +559,17 @@ fn cmd_add(
     command: Option<String>,
     args: Vec<String>,
     url: Option<String>,
+    bearer_token: Option<String>,
+    raw_headers: Vec<String>,
+    raw_env: Vec<String>,
+    force: bool,
 ) {
     if command.is_none() && url.is_none() {
         eprintln!("Error: must provide --command and/or --url");
+        process::exit(1);
+    }
+    if url.is_none() && (bearer_token.is_some() || !raw_headers.is_empty()) {
+        eprintln!("Error: --bearer-token and --header require --url");
         process::exit(1);
     }
 
@@ -541,6 +589,18 @@ fn cmd_add(
         }
     };
 
+    if !force {
+        let existing = read_mcp_servers(
+            path.to_string(),
+            client_def.config_key.to_string(),
+            Some(client_def.config_format.to_string()),
+        ).unwrap_or_default();
+        if existing.iter().any(|s| s.name == name) {
+            eprintln!("Error: server '{}' already exists in {}. Use --force to overwrite.", name, client_def.name);
+            process::exit(1);
+        }
+    }
+
     let mut entry = serde_json::json!({});
     if let Some(ref cmd) = command {
         entry["command"] = serde_json::json!(cmd);
@@ -550,6 +610,33 @@ fn cmd_add(
     }
     if let Some(ref u) = url {
         entry["url"] = serde_json::json!(u);
+    }
+    if !raw_env.is_empty() {
+        let mut env_map = serde_json::Map::new();
+        for e in &raw_env {
+            if let Some((key, val)) = e.split_once('=') {
+                env_map.insert(key.to_string(), serde_json::json!(val));
+            } else {
+                eprintln!("Invalid env format '{}'. Expected KEY=VALUE", e);
+                process::exit(1);
+            }
+        }
+        entry["env"] = serde_json::Value::Object(env_map);
+    }
+    let mut headers_map = serde_json::Map::new();
+    for h in &raw_headers {
+        if let Some((key, val)) = h.split_once(':') {
+            headers_map.insert(key.trim().to_string(), serde_json::json!(val.trim()));
+        } else {
+            eprintln!("Invalid header format '{}'. Expected 'Key: Value'", h);
+            process::exit(1);
+        }
+    }
+    if let Some(ref token) = bearer_token {
+        headers_map.insert("Authorization".to_string(), serde_json::json!(format!("Bearer {}", token)));
+    }
+    if !headers_map.is_empty() {
+        entry["headers"] = serde_json::Value::Object(headers_map);
     }
 
     match insert_server(
@@ -1050,7 +1137,12 @@ fn ping_url(name: &str, url: &str) {
 }
 
 fn ping_command(name: &str, cmd: &str) {
-    match std::process::Command::new("which").arg(cmd).output() {
+    #[cfg(target_os = "windows")]
+    let lookup_cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let lookup_cmd = "which";
+
+    match std::process::Command::new(lookup_cmd).arg(cmd).output() {
         Ok(output) => {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -1061,7 +1153,7 @@ fn ping_command(name: &str, cmd: &str) {
             }
         }
         Err(e) => {
-            eprintln!("Error running which: {}", e);
+            eprintln!("Error running {}: {}", lookup_cmd, e);
             process::exit(1);
         }
     }
