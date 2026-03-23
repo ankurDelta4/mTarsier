@@ -1,101 +1,44 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::PathBuf;
 
 use super::utils::expand_tilde;
 
-// ─── ANSI stripping ───────────────────────────────────────────────────────────
+// ─── Registry search via skills.sh API ───────────────────────────────────────
 
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            // consume everything until a letter (the final byte of the escape)
-            for nc in chars.by_ref() {
-                if nc.is_ascii_alphabetic() {
-                    break;
-                }
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-// ─── Registry search ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SkillSearchResult {
-    pub source: String,
+    pub id: String,
     pub name: String,
-    pub installs: u64,
-    pub url: String,
+    pub installs: Option<u64>,
+    pub source: Option<String>,
 }
 
-fn parse_search_output(text: &str) -> Vec<SkillSearchResult> {
-    let mut results = vec![];
-    let lines: Vec<&str> = text.lines().collect();
-    let mut i = 0;
-    while i < lines.len() {
-        let line = lines[i].trim();
-        // Match lines like: "owner/repo@skill-name  N installs"
-        if line.contains('@') && line.contains('/') && line.contains("install") {
-            if let Some(inst_pos) = line.find("install") {
-                let before = line[..inst_pos].trim();
-                // split on last whitespace to get source and count
-                if let Some(sp) = before.rfind(|c: char| c.is_whitespace()) {
-                    let source = before[..sp].trim().to_string();
-                    let count = before[sp + 1..].trim().parse::<u64>().unwrap_or(0);
-                    if source.contains('@') && source.contains('/') {
-                        let name = source
-                            .split('@')
-                            .last()
-                            .unwrap_or(&source)
-                            .to_string();
-                        // URL on next line starting with └ or http
-                        let mut url = String::new();
-                        if i + 1 < lines.len() {
-                            let next = lines[i + 1].trim();
-                            if next.starts_with('\u{2514}') || next.starts_with("http") {
-                                url = next
-                                    .trim_start_matches('\u{2514}')
-                                    .trim()
-                                    .to_string();
-                                i += 1;
-                            }
-                        }
-                        results.push(SkillSearchResult { source, name, installs: count, url });
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    results
+#[derive(Debug, Deserialize)]
+struct ApiSearchResponse {
+    skills: Vec<SkillSearchResult>,
 }
 
 #[tauri::command]
 pub fn skills_search(query: String) -> Result<Vec<SkillSearchResult>, String> {
-    let mut child = std::process::Command::new("npx")
-        .args(["--yes", "skills", "find", &query])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("npx not found — make sure Node.js is installed: {e}"))?;
-
-    // Send ESC immediately to dismiss the interactive TUI after results print
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(b"\x1b");
+    if query.trim().len() < 2 {
+        return Ok(vec![]);
     }
-
-    let output = child.wait_with_output().map_err(|e| e.to_string())?;
-    let raw = String::from_utf8_lossy(&output.stdout).to_string();
-    let text = strip_ansi(&raw);
-    Ok(parse_search_output(&text))
+    let url = format!(
+        "https://skills.sh/api/search?q={}&limit=20",
+        query.trim().replace(' ', "+")
+    );
+    // Use curl — available on macOS/Linux by default, no extra deps needed
+    let output = std::process::Command::new("curl")
+        .args(["-sf", "-H", "Accept: application/json", &url])
+        .output()
+        .map_err(|e| format!("curl not found: {e}"))?;
+    if !output.status.success() {
+        return Err("Search request failed".to_string());
+    }
+    let resp: ApiSearchResponse = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    Ok(resp.skills)
 }
 
 #[tauri::command]
@@ -104,9 +47,8 @@ pub fn skills_install(source: String) -> Result<(), String> {
         .args(["--yes", "skills", "add", &source, "-g", "-y"])
         .output()
         .map_err(|e| format!("npx not found — make sure Node.js is installed: {e}"))?;
-
     if !output.status.success() {
-        let err = strip_ansi(&String::from_utf8_lossy(&output.stderr));
+        let err = String::from_utf8_lossy(&output.stderr);
         return Err(err.trim().to_string());
     }
     Ok(())

@@ -1,14 +1,14 @@
-interface SkillSearchResult {
-  source: string;
+export interface SkillSearchResult {
+  id: string;
   name: string;
-  installs: number;
-  url: string;
+  installs?: number;
+  source?: string;
 }
 
 interface Props {
   skill: SkillSearchResult;
   installing: boolean;
-  onInstall: (source: string) => void;
+  onInstall: (id: string) => void;
 }
 
 export default function RegistrySkillCard({ skill, installing, onInstall }: Props) {
@@ -23,18 +23,22 @@ export default function RegistrySkillCard({ skill, installing, onInstall }: Prop
           </div>
           <div className="min-w-0">
             <p className="text-xs font-semibold text-text truncate">{skill.name}</p>
-            <p className="text-[10px] text-text-muted/60 truncate font-mono">{skill.source.split("@")[0]}</p>
+            {skill.source && (
+              <p className="text-[10px] text-text-muted/60 truncate">{skill.source}</p>
+            )}
           </div>
         </div>
-        <span className="flex-shrink-0 text-[10px] text-text-muted/50 whitespace-nowrap">
-          {skill.installs.toLocaleString()} installs
-        </span>
+        {skill.installs != null && skill.installs > 0 && (
+          <span className="flex-shrink-0 text-[10px] text-text-muted/50 whitespace-nowrap">
+            {skill.installs.toLocaleString()} installs
+          </span>
+        )}
       </div>
 
-      <p className="text-[10px] font-mono text-text-muted/50 truncate">{skill.source}</p>
+      <p className="text-[10px] font-mono text-text-muted/40 truncate">{skill.id}</p>
 
       <button
-        onClick={() => onInstall(skill.source)}
+        onClick={() => onInstall(skill.id)}
         disabled={installing}
         className="mt-auto text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 disabled:opacity-50 transition-colors"
       >
@@ -43,5 +47,3 @@ export default function RegistrySkillCard({ skill, installing, onInstall }: Prop
     </div>
   );
 }
-
-export type { SkillSearchResult };

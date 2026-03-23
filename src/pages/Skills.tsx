@@ -162,8 +162,8 @@ function DiscoverTab({ onInstalled }: { onInstalled: (name: string) => void }) {
     setSearching(true);
     setError(null);
     try {
-      const res = await invoke<SkillSearchResult[]>("skills_search", { query: query.trim() });
-      setResults(res);
+      const results = await invoke<SkillSearchResult[]>("skills_search", { query: query.trim() });
+      setResults(results);
     } catch (e) {
       setError(String(e));
     } finally {
