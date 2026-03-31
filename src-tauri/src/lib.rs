@@ -42,6 +42,7 @@ pub fn run() {
       commands::skills::list_skills,
       commands::skills::write_skill,
       commands::skills::delete_skill,
+      commands::skills::delete_skills_bulk,
       commands::skills::read_skill,
       commands::skills::reveal_in_finder,
       commands::skills::skills_search,
