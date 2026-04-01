@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, FolderOpen } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { cn } from "../../lib/utils";
 import { useClientStore } from "../../store/clientStore";
 import { getSkillableClients } from "../../store/skillStore";
@@ -8,7 +9,7 @@ import type { SkillSearchResult } from "./RegistrySkillCard";
 interface Props {
   skill: SkillSearchResult;
   onClose: () => void;
-  onInstall: (clientIds: string[]) => Promise<void>;
+  onInstall: (clientIds: string[], customPaths: string[]) => Promise<void>;
   defaultClientIds?: string[];
 }
 
@@ -25,9 +26,24 @@ export default function InstallSkillDialog({
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSelection.length > 0 ? initialSelection : clients.map((c) => c.id))
   );
+  const [customPath, setCustomPath] = useState<string | null>(null);
+  const [pickingFolder, setPickingFolder] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [installStep, setInstallStep] = useState<"downloading" | "copying" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handlePickFolder = async () => {
+    setPickingFolder(true);
+    try {
+      const folder = await invoke<string | null>("pick_folder");
+      if (folder) {
+        // Append /skills so it passes backend validation
+        setCustomPath(folder.replace(/\/+$/, "") + "/skills");
+      }
+    } finally {
+      setPickingFolder(false);
+    }
+  };
   const waitForNextFrame = () =>
     new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -39,29 +55,26 @@ export default function InstallSkillDialog({
     });
 
   const handleInstall = async () => {
-    if (selected.size === 0) {
-      setError("Select at least one client");
+    if (selected.size === 0 && !customPath) {
+      setError("Select at least one client or add a custom folder");
       return;
     }
     setInstalling(true);
     setInstallStep("downloading");
     setError(null);
 
-    // Set up timer to switch to copying phase
     const copyTimer = setTimeout(() => {
       setInstallStep("copying");
     }, 1500);
 
     try {
-      // Ensure loading UI paints before install work starts.
       await waitForNextFrame();
-      await onInstall(Array.from(selected));
+      await onInstall(Array.from(selected), customPath ? [customPath] : []);
       clearTimeout(copyTimer);
       onClose();
     } catch (e) {
       clearTimeout(copyTimer);
       const errorMsg = String(e);
-      // Extract meaningful error message
       const cleanError = errorMsg
         .replace("Error: ", "")
         .replace(/^Error:\s*/i, "");
@@ -181,6 +194,30 @@ export default function InstallSkillDialog({
                   )}
                 </button>
               ))}
+
+              {/* Custom path row */}
+              {customPath ? (
+                <div className="w-full text-xs px-3 py-2 rounded-lg border border-primary/40 bg-primary/10 text-primary flex items-center gap-2">
+                  <FolderOpen size={12} className="flex-shrink-0" />
+                  <span className="flex-1 font-mono text-[10px] truncate" title={customPath}>{customPath}</span>
+                  <button
+                    onClick={() => setCustomPath(null)}
+                    className="flex-shrink-0 hover:text-red-400 transition-colors"
+                    title="Remove custom path"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handlePickFolder}
+                  disabled={pickingFolder}
+                  className="w-full text-left text-xs px-3 py-2 rounded-lg border border-dashed border-border text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <FolderOpen size={12} className="flex-shrink-0" />
+                  <span className="flex-1">{pickingFolder ? "Selecting folder…" : "Custom folder…"}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -201,15 +238,17 @@ export default function InstallSkillDialog({
           </button>
           <button
             onClick={handleInstall}
-            disabled={installing || selected.size === 0}
+            disabled={installing || (selected.size === 0 && !customPath)}
             className="text-xs font-medium px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {installing && (
               <span className="inline-block w-3.5 h-3.5 border-2 border-primary/35 border-t-primary rounded-full animate-spin" />
             )}
-            {installing
-              ? `Installing to ${selected.size} client${selected.size !== 1 ? "s" : ""}…`
-              : `Install to ${selected.size} client${selected.size !== 1 ? "s" : ""}`}
+            {(() => {
+              const total = selected.size + (customPath ? 1 : 0);
+              const label = `${total} target${total !== 1 ? "s" : ""}`;
+              return installing ? `Installing to ${label}…` : `Install to ${label}`;
+            })()}
           </button>
         </div>
       </div>

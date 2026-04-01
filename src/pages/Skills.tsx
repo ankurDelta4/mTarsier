@@ -23,7 +23,19 @@ function Skills() {
   const [toast, setToast] = useState<string | null>(null);
 
   const { clients: clientStates } = useClientStore();
-  const detectedMetas = clientStates.filter((cs) => cs.installed).map((cs) => cs.meta);
+  // Filter out false positives: clients marked as installed but whose binary doesn't actually exist
+  // This happens when only config files exist (e.g. ~/.gemini/ or ~/.config/opencode/)
+  const detectedMetas = clientStates
+    .filter((cs) => {
+      // Only show as installed if:
+      // 1. detection says installed AND
+      // 2. either has servers configured OR is not a CLI tool with just empty config
+      const hasServers = (cs.serverCount ?? 0) > 0;
+      const isCliWithOnlyConfig = cs.meta.detection.kind === "cli_binary" && cs.configExists && !hasServers;
+
+      return cs.installed && !isCliWithOnlyConfig;
+    })
+    .map((cs) => cs.meta);
   const clients = getSkillableClients(detectedMetas);
   const { selectedClientId, skills, isLoading, setSelectedClient, loadSkills, writeSkill, deleteSkill, deleteSkills } = useSkillStore();
   const selectedClient = clients.find((c) => c.id === selectedClientId) ?? null;
@@ -601,22 +613,25 @@ function DiscoverTab({
     };
   }, [normalizedQuery, hasActiveQuery]);
 
-  const handleInstallConfirm = async (clientIds: string[]) => {
+  const handleInstallConfirm = async (clientIds: string[], customPaths: string[] = []) => {
     if (!pendingInstall) return;
     const installSource = pendingInstall.id?.trim() || pendingInstall.source?.trim();
     if (!installSource) {
       throw new Error("Invalid skill source");
     }
 
-    if (clientIds.length === 0) {
-      throw new Error("Please select at least one client");
+    if (clientIds.length === 0 && customPaths.length === 0) {
+      throw new Error("Please select at least one client or custom folder");
     }
 
-    // Get target paths for selected clients
-    const targetPaths = clientIds
-      .map((id) => clients.find((c) => c.id === id))
-      .filter((c) => c?.skillsPath)
-      .map((c) => c!.skillsPath);
+    // Get target paths for selected clients plus any custom paths
+    const targetPaths = [
+      ...clientIds
+        .map((id) => clients.find((c) => c.id === id))
+        .filter((c) => c?.skillsPath)
+        .map((c) => c!.skillsPath),
+      ...customPaths,
+    ];
 
     if (targetPaths.length === 0) {
       throw new Error("No valid client paths selected for installation");

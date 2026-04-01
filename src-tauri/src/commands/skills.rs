@@ -52,7 +52,10 @@ fn validate_skills_root_path(path: &Path) -> Result<PathBuf, String> {
         return Err("Path must be inside your home directory".to_string());
     }
 
-    Ok(path.to_path_buf())
+    // Return canonical ancestor joined with the remaining (not-yet-existing) suffix,
+    // so any symlinks in the existing portion are resolved before use.
+    let suffix = path.strip_prefix(&ancestor).unwrap_or(std::path::Path::new(""));
+    Ok(canonical_ancestor.join(suffix))
 }
 
 fn expand_and_validate_skills_root(raw_path: &str) -> Result<PathBuf, String> {

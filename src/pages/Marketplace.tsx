@@ -829,9 +829,6 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
                 <div key={`${skill.clientId}-${skill.path}`} className="relative">
                   <SkillCard
                     skill={skill}
-                    selectionMode={false}
-                    selected={false}
-                    onToggleSelect={() => {}}
                     onOpenInFinder={async () => {
                       try {
                         await invoke("reveal_in_finder", { path: skill.path });
@@ -860,7 +857,6 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
       {pendingInstall && (
         <InstallSkillDialog
           skill={pendingInstall}
-          defaultClientIds={clients.length > 0 ? [clients[0].id] : []}
           onClose={() => setPendingInstall(null)}
           onInstall={handleInstallConfirm}
         />

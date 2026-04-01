@@ -123,13 +123,15 @@ export default function SkillCard({
         )}
       </div>
 
-      {skill.description ? (
-        <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2">
-          {skill.description}
-        </p>
-      ) : (
-        <p className="text-[11px] text-text-muted/40 italic">No description</p>
-      )}
+      <div className="min-h-[2.5rem] flex items-start">
+        {skill.description ? (
+          <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2">
+            {skill.description}
+          </p>
+        ) : (
+          <p className="text-[11px] text-text-muted/40 italic">No description</p>
+        )}
+      </div>
 
       <div className="mt-auto pt-1">
         <button

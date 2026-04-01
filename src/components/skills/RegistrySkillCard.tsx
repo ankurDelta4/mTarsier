@@ -40,11 +40,8 @@ export default function RegistrySkillCard({ skill, installing, onInstall }: Prop
       <button
         onClick={() => onInstall(skill)}
         disabled={installing}
-        className="mt-auto text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
+        className="mt-auto text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 disabled:opacity-50 transition-colors"
       >
-        {installing && (
-          <span className="inline-block w-3 h-3 border-2 border-primary/35 border-t-primary rounded-full animate-spin" />
-        )}
         {installing ? "Installing…" : "Install"}
       </button>
     </div>

@@ -266,7 +266,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     detection: { kind: "cli_binary", name: "copilot" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
     supportsSkills: true,
-    skillsPath: "~/.github/skills",
+    skillsPath: "~/.copilot/skills",
   },
 ];
 

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { useClientStore } from "../../store/clientStore";
 import { getSkillableClients } from "../../store/skillStore";
+import { useClientStore } from "../../store/clientStore";
 import type { InstalledSkill } from "../../store/skillStore";
 
 interface Props {
@@ -14,8 +14,14 @@ interface Props {
 
 export default function CopySkillDialog({ skill, sourceClientId, onClose, onCopy }: Props) {
   const { clients: clientStates } = useClientStore();
-  const detectedMetas = clientStates.filter((cs) => cs.installed).map((cs) => cs.meta);
-  const clients = getSkillableClients(detectedMetas).filter((c) => c.id !== sourceClientId);
+  const detectedMetas = useMemo(
+    () => clientStates.filter((cs) => cs.installed).map((cs) => cs.meta),
+    [clientStates]
+  );
+  const clients = useMemo(
+    () => getSkillableClients(detectedMetas).filter((c) => c.id !== sourceClientId),
+    [detectedMetas, sourceClientId]
+  );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);
