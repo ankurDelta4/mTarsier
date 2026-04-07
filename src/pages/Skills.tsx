@@ -114,7 +114,7 @@ function Skills() {
       <div className="flex gap-1 mb-5 border-b border-border">
         {(["installed", "discover"] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize",
+            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer",
               tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
             )}>{t}</button>
         ))}
@@ -322,7 +322,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => onSelectClient("all")}
-            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
               selectedClientId === "all"
                 ? "bg-primary/10 text-primary border-primary/30"
                 : "text-text-muted border-border hover:border-border-hover hover:text-text"
@@ -332,7 +332,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           </button>
           {clients.map((c) => (
             <button key={c.id} onClick={() => onSelectClient(c.id)}
-              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
                 selectedClientId === c.id
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "text-text-muted border-border hover:border-border-hover hover:text-text"
@@ -344,20 +344,20 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
             <>
               <button
                 onClick={exitSelectionMode}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={selected.size === displaySkills.length ? deselectAll : selectAll}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
               >
                 {selected.size === displaySkills.length ? "Deselect All" : "Select All"}
               </button>
               <button
                 onClick={() => setConfirmBulkDelete(true)}
                 disabled={selected.size === 0}
-                className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 Delete ({selected.size})
               </button>
@@ -367,7 +367,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
               {displaySkills.length > 0 && (
                 <button
                   onClick={() => setSelectionMode(true)}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
                 >
                   Select
                 </button>
@@ -375,7 +375,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
               <button
                 onClick={onAdd}
                 disabled={!canAdd || selectedClientId === "all"}
-                className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 Add Skill
               </button>
@@ -458,14 +458,14 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
               <button
                 onClick={() => setConfirmBulkDelete(false)}
                 disabled={isDeleting}
-                className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50"
+                className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={isDeleting}
-                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-400/10 border border-red-400/30 text-red-400 hover:bg-red-400/15 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-400/10 border border-red-400/30 text-red-400 hover:bg-red-400/15 transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
                 {isDeleting && (
                   <div className="flex gap-0.5">

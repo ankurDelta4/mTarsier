@@ -45,6 +45,7 @@ pub struct FlowImportResult {
     pub imported_skills: u32,
     pub skipped_clients: Vec<String>,
     pub skipped_servers: Vec<String>,
+    pub skipped_skills: Vec<String>,
     pub errors: Vec<String>,
 }
 
@@ -157,6 +158,7 @@ pub fn import_flow(
         imported_skills: 0,
         skipped_clients: vec![],
         skipped_servers: vec![],
+        skipped_skills: vec![],
         errors: vec![],
     };
 
@@ -172,7 +174,11 @@ pub fn import_flow(
 
     // Read current config file for merging
     let abs_path = crate::commands::utils::expand_tilde(config_path);
-    let raw_content = std::fs::read_to_string(&abs_path).unwrap_or_else(|_| "{}".to_string());
+    let raw_content = std::fs::read_to_string(&abs_path)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let raw_content = if raw_content.is_empty() { "{}".to_string() } else { raw_content };
     let mut root: serde_json::Value = serde_json::from_str(&raw_content)
         .map_err(|e| format!("Failed to parse target config: {e}"))?;
 
@@ -230,11 +236,37 @@ pub fn import_flow(
             if let Some(skills_path) = platform_skills_path(target_client) {
                 let skills_dir = crate::commands::utils::expand_tilde(skills_path);
                 for skill in &flow_client.skills {
+                    // Reject names that could escape the skills directory
+                    if skill.name.is_empty()
+                        || skill.name.contains('/')
+                        || skill.name.contains('\\')
+                        || skill.name.contains("..")
+                    {
+                        result
+                            .errors
+                            .push(format!("Skill '{}' has an invalid name", skill.name));
+                        continue;
+                    }
+                    // Reject oversized content (1 MB limit)
+                    const MAX_SKILL_BYTES: usize = 1024 * 1024;
+                    if skill.content.len() > MAX_SKILL_BYTES {
+                        result
+                            .errors
+                            .push(format!("Skill '{}' content exceeds 1 MB limit", skill.name));
+                        continue;
+                    }
                     let skill_dir = skills_dir.join(&skill.name);
+                    // Belt-and-suspenders: confirm resolved path stays within skills_dir
+                    if !skill_dir.starts_with(&skills_dir) {
+                        result
+                            .errors
+                            .push(format!("Skill '{}' resolved outside skills directory", skill.name));
+                        continue;
+                    }
                     if skill_dir.exists() {
                         result
-                            .skipped_servers
-                            .push(format!("{} skill (already exists)", skill.name));
+                            .skipped_skills
+                            .push(format!("{} (already exists)", skill.name));
                         continue;
                     }
                     match std::fs::create_dir_all(&skill_dir) {
