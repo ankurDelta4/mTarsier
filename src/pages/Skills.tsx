@@ -3,7 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { cn } from "../lib/utils";
 import { useSkillStore, getSkillableClients } from "../store/skillStore";
 import { useClientStore } from "../store/clientStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { InstalledSkill } from "../store/skillStore";
+import type { ClientMeta } from "../types/client";
 import SkillCard from "../components/skills/SkillCard";
 import CopySkillDialog from "../components/skills/CopySkillDialog";
 import InstallSkillDialog from "../components/skills/InstallSkillDialog";
@@ -36,7 +38,26 @@ function Skills() {
       return cs.installed && !isCliWithOnlyConfig;
     })
     .map((cs) => cs.meta);
-  const clients = getSkillableClients(detectedMetas);
+  const registryClients = getSkillableClients(detectedMetas);
+  const { customSkillsPaths, addCustomSkillsPath, removeCustomSkillsPath } = useSettingsStore();
+  const customClients: ClientMeta[] = customSkillsPaths.map(({ id, label, path }) => ({
+    id,
+    name: label,
+    type: "CLI",
+    docsUrl: "",
+    configPath: null,
+    configPathWin: null,
+    configPathLinux: null,
+    configKey: "",
+    configFormat: "json",
+    detection: { kind: "none" },
+    supportedTransports: [],
+    supportsSkills: true,
+    skillsPath: path,
+  }));
+  const clients = [...registryClients, ...customClients];
+  const customClientIds = new Set(customClients.map((c) => c.id));
+
   const { selectedClientId, skills, isLoading, setSelectedClient, loadSkills, writeSkill, deleteSkill, deleteSkills } = useSkillStore();
   const selectedClient = clients.find((c) => c.id === selectedClientId) ?? null;
 
@@ -132,6 +153,25 @@ function Skills() {
           onCopyTo={setCopying} onDelete={setDeleting}
           deleteSkills={deleteSkills}
           showToast={showToast}
+          customClientIds={customClientIds}
+          onRemoveCustomClient={(id) => {
+            removeCustomSkillsPath(id);
+            if (selectedClientId === id) {
+              setSelectedClient("all");
+              loadSkills(undefined);
+            }
+          }}
+          onAddCustomClient={async () => {
+            const folder = await invoke<string | null>("pick_folder");
+            if (!folder) return;
+            const path = folder;
+            const id = `custom::${path}`;
+            if (customSkillsPaths.some((p) => p.id === id)) return;
+            const parts = path.replace(/\\/g, "/").split("/");
+            const label = parts[parts.length - 1] || path;
+            addCustomSkillsPath({ id, label, path });
+            setSelectedClient(id);
+          }}
         />
       )}
       {tab === "discover" && (
@@ -173,8 +213,8 @@ function Skills() {
   );
 }
 
-function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast }: {
-  clients: ReturnType<typeof getSkillableClients>;
+function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast, customClientIds, onRemoveCustomClient, onAddCustomClient }: {
+  clients: ClientMeta[];
   selectedClientId: string | null;
   skills: InstalledSkill[];
   isLoading: boolean;
@@ -187,6 +227,9 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
   onDelete: (s: InstalledSkill) => void;
   deleteSkills: (paths: string[], skillsPath: string) => Promise<void>;
   showToast: (msg: string) => void;
+  customClientIds: Set<string>;
+  onRemoveCustomClient: (id: string) => void;
+  onAddCustomClient: () => void;
 }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -322,7 +365,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => onSelectClient("all")}
-            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
               selectedClientId === "all"
                 ? "bg-primary/10 text-primary border-primary/30"
                 : "text-text-muted border-border hover:border-border-hover hover:text-text"
@@ -330,14 +373,51 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           >
             All
           </button>
-          {clients.map((c) => (
-            <button key={c.id} onClick={() => onSelectClient(c.id)}
-              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
-                selectedClientId === c.id
-                  ? "bg-primary/10 text-primary border-primary/30"
-                  : "text-text-muted border-border hover:border-border-hover hover:text-text"
-              )}>{c.name}</button>
-          ))}
+          {clients.map((c) => {
+            const isCustom = customClientIds.has(c.id);
+            const isSelected = selectedClientId === c.id;
+            return isCustom ? (
+              <div
+                key={c.id}
+                className={cn(
+                  "flex items-center rounded-full border transition-colors text-xs",
+                  isSelected ? "bg-primary/10 text-primary border-primary/30" : "text-text-muted border-border"
+                )}
+              >
+                <button
+                  onClick={() => onSelectClient(c.id)}
+                  className="pl-2.5 pr-1.5 py-1 cursor-pointer hover:text-text transition-colors"
+                >
+                  {c.name}
+                </button>
+                <button
+                  onClick={() => onRemoveCustomClient(c.id)}
+                  className="pr-2 py-1 cursor-pointer hover:text-red-400 transition-colors"
+                  title="Remove custom path"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button key={c.id} onClick={() => onSelectClient(c.id)}
+                className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
+                  isSelected
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "text-text-muted border-border hover:border-border-hover hover:text-text"
+                )}>{c.name}</button>
+            );
+          })}
+          <button
+            onClick={onAddCustomClient}
+            title="Add custom skills folder"
+            className="flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-border text-text-muted hover:border-primary/40 hover:text-primary transition-colors cursor-pointer"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+          </button>
         </div>
         <div className="flex items-center gap-2">
           {selectionMode ? (
@@ -396,12 +476,37 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           ))}
         </div>
       ) : displaySkills.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-16 text-center">
-          <p className="text-sm text-text-muted">No skills installed</p>
-          <p className="text-[11px] text-text-muted/50">
-            Browse the <span className="text-text">Discover</span> tab to install from the registry
-          </p>
-        </div>
+        (() => {
+          const isCustom = selectedClientId != null && customClientIds.has(selectedClientId);
+          return (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              {isCustom ? (
+                <>
+                  <p className="text-sm text-text-muted">No skills found at this path</p>
+                  <p className="text-[11px] text-text-muted/50 max-w-xs mt-1">
+                    Skills are detected as <span className="font-mono text-text">subfolders</span> inside the selected folder, each containing a <span className="font-mono text-text">SKILL.md</span> file. Or place a <span className="font-mono text-text">SKILL.md</span> directly in the folder to use it as a single skill.
+                  </p>
+                  <div className="mt-3 rounded-md border border-border bg-surface px-4 py-3 text-left text-[11px] font-mono text-text-muted space-y-0.5">
+                    <p className="text-text font-semibold mb-1 font-sans not-italic">Expected structure</p>
+                    <p><span className="text-primary">selected-folder/</span></p>
+                    <p>&nbsp;&nbsp;<span className="text-text">my-skill/</span>&nbsp;&nbsp;&nbsp;<span className="text-text-muted opacity-50">← skill folder</span></p>
+                    <p>&nbsp;&nbsp;&nbsp;&nbsp;SKILL.md</p>
+                  </div>
+                  <p className="text-[11px] text-text-muted/50 mt-3">
+                    If your <span className="font-mono text-text">SKILL.md</span> is directly inside the picked folder, select its <span className="text-text">parent folder</span> instead.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-text-muted">No skills installed</p>
+                  <p className="text-[11px] text-text-muted/50">
+                    Browse the <span className="text-text">Discover</span> tab to install from the registry
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="grid grid-cols-3 gap-3">
           {displaySkills.map((s) => {

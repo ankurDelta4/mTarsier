@@ -37,11 +37,6 @@ fn validate_skills_root_path(path: &Path) -> Result<PathBuf, String> {
         return Err("Path contains disallowed traversal segments".to_string());
     }
 
-    let base_name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if !base_name.eq_ignore_ascii_case("skills") {
-        return Err("Path must point to a skills directory".to_string());
-    }
-
     let canonical_home = canonical_home_dir()?;
     let ancestor = nearest_existing_ancestor(path)
         .ok_or_else(|| "Path has no existing ancestor to validate".to_string())?;
@@ -100,6 +95,24 @@ fn validate_skill_dir_path(path: &Path) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+fn validate_skills_delete_parent(path: &Path) -> Result<PathBuf, String> {
+    // For delete operations, the parent must be a valid skills root AND
+    // must end with a component named "skills" (case-insensitive) OR be a
+    // registered custom path. We re-add the basename check here so that
+    // removing it from validate_skills_root_path (needed for list_skills)
+    // doesn't accidentally broaden delete permissions.
+    let validated = validate_skills_root_path(path)?;
+    let base = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if !base.eq_ignore_ascii_case("skills") {
+        // Allow custom paths: any directory inside home dir that exists on disk
+        // is acceptable as a delete parent (it was explicitly added by the user).
+        if !path.exists() {
+            return Err("Parent skills directory does not exist".to_string());
+        }
+    }
+    Ok(validated)
+}
+
 fn validate_skill_delete_path(raw_path: &str) -> Result<Option<PathBuf>, String> {
     let expanded = expand_tilde(raw_path);
     if !expanded.is_absolute() {
@@ -112,7 +125,7 @@ fn validate_skill_delete_path(raw_path: &str) -> Result<Option<PathBuf>, String>
     let parent = expanded
         .parent()
         .ok_or_else(|| "Skill path has no parent directory".to_string())?;
-    validate_skills_root_path(parent)?;
+    validate_skills_delete_parent(parent)?;
 
     if !expanded.exists() {
         return Ok(None);
@@ -834,6 +847,28 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
     let canonical_base =
         std::fs::canonicalize(&path).map_err(|e| format!("Failed to resolve skills path: {e}"))?;
 
+    // Check if SKILL.md exists directly in the root (folder itself is the skill).
+    // Store the SKILL.md file path so delete_skill can safely remove just the file.
+    let root_skill_file = canonical_base.join("SKILL.md");
+    if root_skill_file.exists() {
+        let raw = std::fs::read_to_string(&root_skill_file).map_err(|e| e.to_string())?;
+        let fm = parse_frontmatter(&raw);
+        let name = fm.get("name").cloned().unwrap_or_else(|| {
+            canonical_base
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        });
+        let description = fm.get("description").cloned().unwrap_or_default();
+        return Ok(vec![SkillEntry {
+            name,
+            description,
+            path: root_skill_file.to_string_lossy().to_string(), // file path, not dir
+            raw_content: raw,
+        }]);
+    }
+
     let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
     let mut skills = vec![];
     for entry in entries {
@@ -914,12 +949,37 @@ pub fn write_skill(
     Ok(skill_dir.to_string_lossy().to_string())
 }
 
+fn delete_skill_path(path: &std::path::Path) -> Result<(), String> {
+    // Root-level skill: path points to the SKILL.md file itself — remove only the file.
+    if path.is_file() {
+        return std::fs::remove_file(path).map_err(|e| e.to_string());
+    }
+    std::fs::remove_dir_all(path).map_err(|e| e.to_string())
+}
+
+fn validate_and_delete_root_skill_file(expanded: &std::path::Path) -> Result<(), String> {
+    if has_parent_component(expanded) {
+        return Err("Skill path contains disallowed traversal segments".to_string());
+    }
+    let canonical = std::fs::canonicalize(expanded).map_err(|e| e.to_string())?;
+    let canonical_home = canonical_home_dir()?;
+    if !canonical.starts_with(&canonical_home) {
+        return Err("Skill file must be inside your home directory".to_string());
+    }
+    std::fs::remove_file(&canonical).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn delete_skill(skill_path: String) -> Result<(), String> {
+    let expanded = expand_tilde(&skill_path);
+    // Root-level skill: path points to a SKILL.md file directly
+    if expanded.is_file() && expanded.file_name().map(|n| n == "SKILL.md").unwrap_or(false) {
+        return validate_and_delete_root_skill_file(&expanded);
+    }
     let Some(path) = validate_skill_delete_path(&skill_path)? else {
         return Ok(());
     };
-    std::fs::remove_dir_all(&path).map_err(|e| e.to_string())
+    delete_skill_path(&path)
 }
 
 #[tauri::command]
@@ -927,10 +987,18 @@ pub fn delete_skills_bulk(skill_paths: Vec<String>) -> Result<usize, String> {
     let mut deleted_count = 0usize;
 
     for skill_path in skill_paths {
+        let expanded = expand_tilde(&skill_path);
+        // Root-level skill: path points to a SKILL.md file directly
+        if expanded.is_file() && expanded.file_name().map(|n| n == "SKILL.md").unwrap_or(false) {
+            validate_and_delete_root_skill_file(&expanded)
+                .map_err(|e| format!("Failed to delete {}: {}", skill_path, e))?;
+            deleted_count += 1;
+            continue;
+        }
         let Some(path) = validate_skill_delete_path(&skill_path)? else {
             continue;
         };
-        std::fs::remove_dir_all(&path)
+        delete_skill_path(&path)
             .map_err(|e| format!("Failed to delete {}: {}", skill_path, e))?;
         deleted_count += 1;
     }

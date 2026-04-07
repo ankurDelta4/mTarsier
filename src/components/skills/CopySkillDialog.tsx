@@ -3,7 +3,9 @@ import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { getSkillableClients } from "../../store/skillStore";
 import { useClientStore } from "../../store/clientStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import type { InstalledSkill } from "../../store/skillStore";
+import type { ClientMeta } from "../../types/client";
 
 interface Props {
   skill: InstalledSkill;
@@ -14,14 +16,30 @@ interface Props {
 
 export default function CopySkillDialog({ skill, sourceClientId, onClose, onCopy }: Props) {
   const { clients: clientStates } = useClientStore();
+  const { customSkillsPaths } = useSettingsStore();
   const detectedMetas = useMemo(
     () => clientStates.filter((cs) => cs.installed).map((cs) => cs.meta),
     [clientStates]
   );
-  const clients = useMemo(
-    () => getSkillableClients(detectedMetas).filter((c) => c.id !== sourceClientId),
-    [detectedMetas, sourceClientId]
-  );
+  const clients = useMemo(() => {
+    const registry = getSkillableClients(detectedMetas);
+    const custom: ClientMeta[] = customSkillsPaths.map(({ id, label, path }) => ({
+      id,
+      name: label,
+      type: "CLI",
+      docsUrl: "",
+      configPath: null,
+      configPathWin: null,
+      configPathLinux: null,
+      configKey: "",
+      configFormat: "json",
+      detection: { kind: "none" },
+      supportedTransports: [],
+      supportsSkills: true,
+      skillsPath: path,
+    }));
+    return [...registry, ...custom].filter((c) => c.id !== sourceClientId);
+  }, [detectedMetas, customSkillsPaths, sourceClientId]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "../store/themeStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { themes, type ThemeId } from "../lib/themes";
+import { CustomSkillsSection } from "../components/settings/CustomSkillsSection";
 import { UpdateSection } from "../components/settings/UpdateSection";
 
 const themeList = Object.values(themes);
@@ -224,6 +225,8 @@ function Settings() {
       </section>
 
         <CliSection />
+
+        <CustomSkillsSection />
 
         <UpdateSection />
 
