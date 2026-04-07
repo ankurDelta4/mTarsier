@@ -96,7 +96,7 @@ fn probe_binary_dirs(name: &str) -> bool {
     }
 }
 
-fn check_installed(kind: &str, value: Option<&str>) -> bool {
+pub fn check_installed(kind: &str, value: Option<&str>) -> bool {
     match kind {
         "app_bundle" => {
             // expand_tilde handles %VAR% on Windows and ~/ on all platforms.
