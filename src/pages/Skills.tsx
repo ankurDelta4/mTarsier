@@ -376,13 +376,15 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
                   Select
                 </button>
               )}
-              <button
-                onClick={onAdd}
-                disabled={!canAdd || selectedClientId === "all"}
-                className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-              >
-                Add Skill
-              </button>
+              {selectedClientId !== "all" && (
+                <button
+                  onClick={onAdd}
+                  disabled={!canAdd}
+                  className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                >
+                  Add Skill
+                </button>
+              )}
             </>
           )}
         </div>

@@ -422,6 +422,12 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
   const [viewingSkill, setViewingSkill] = useState<InstalledSkill | null>(null);
   const [copyingSkill, setCopyingSkill] = useState<InstalledSkill | null>(null);
   const [deletingSkill, setDeletingSkill] = useState<InstalledSkill | null>(null);
+  const [topPicks, setTopPicks] = useState<SkillSearchResult[]>([]);
+
+  // Load top picks on mount
+  useEffect(() => {
+    invoke<SkillSearchResult[]>("get_featured_skills").then(setTopPicks).catch(() => {});
+  }, []);
 
   // Load all skills when switching to installed view
   useEffect(() => {
@@ -760,40 +766,30 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
           ))}
         </div>
       ) : !hasActiveQuery ? (
-        <div className="flex flex-col items-center gap-4 py-12 text-center">
-          <svg className="w-10 h-10 text-text-muted/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <div className="space-y-1">
-            <p className="text-sm text-text-muted">Search the skills.sh registry</p>
-            <p className="text-[11px] text-text-muted/50">Type at least 2 characters to search</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Top Picks</p>
+            <div className="flex flex-wrap gap-1.5">
+              {["react", "typescript", "python", "git"].map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setQuery(tag)}
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            <button
-              onClick={() => setQuery("react")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              React
-            </button>
-            <button
-              onClick={() => setQuery("typescript")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              TypeScript
-            </button>
-            <button
-              onClick={() => setQuery("python")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Python
-            </button>
-            <button
-              onClick={() => setQuery("git")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Git
-            </button>
+          <div className="grid grid-cols-3 gap-3">
+            {topPicks.map((skill) => (
+              <RegistrySkillCard
+                key={skill.id}
+                skill={skill}
+                installing={installingSource === skill.id}
+                onInstall={setPendingInstall}
+              />
+            ))}
           </div>
         </div>
       ) : results.length === 0 ? (
