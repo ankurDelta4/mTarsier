@@ -8,6 +8,7 @@ const STORAGE_KEY = "mtarsier-settings";
 interface StoredSettings {
   statusBarStyle: StatusBarStyle;
   auditLogsEnabled: boolean;
+  autoUpdate: boolean;
 }
 
 function load(): StoredSettings {
@@ -17,16 +18,18 @@ function load(): StoredSettings {
       const parsed = JSON.parse(stored);
       return {
         statusBarStyle: parsed.statusBarStyle || "C",
-        auditLogsEnabled: parsed.auditLogsEnabled !== undefined ? parsed.auditLogsEnabled : true
+        auditLogsEnabled: parsed.auditLogsEnabled !== undefined ? parsed.auditLogsEnabled : true,
+        autoUpdate: parsed.autoUpdate !== undefined ? parsed.autoUpdate : true,
       };
     }
   } catch {}
-  return { statusBarStyle: "C", auditLogsEnabled: true };
+  return { statusBarStyle: "C", auditLogsEnabled: true, autoUpdate: true };
 }
 
 interface SettingsStore extends StoredSettings {
   setStatusBarStyle: (style: StatusBarStyle) => void;
   setAuditLogsEnabled: (enabled: boolean) => void;
+  setAutoUpdate: (enabled: boolean) => void;
 }
 
 const initial = load();
@@ -47,5 +50,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     set({ auditLogsEnabled });
     invoke("set_audit_enabled", { enabled: auditLogsEnabled }).catch(() => {});
+  },
+
+  setAutoUpdate: (autoUpdate) => {
+    const state = { ...get(), autoUpdate };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    set({ autoUpdate });
   },
 }));
