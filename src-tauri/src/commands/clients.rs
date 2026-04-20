@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
-use super::utils::{expand_config_key, expand_tilde, navigate_json_key};
+use super::utils::{expand_config_key, expand_tilde, navigate_json_key, silent_command};
 
 #[derive(Debug, Deserialize)]
 pub struct DetectionRequest {
@@ -97,20 +96,25 @@ fn probe_binary_dirs(name: &str) -> bool {
     }
 }
 
-fn check_installed(kind: &str, value: Option<&str>) -> bool {
+pub fn check_installed(kind: &str, value: Option<&str>) -> bool {
     match kind {
         "app_bundle" => {
             // expand_tilde handles %VAR% on Windows and ~/ on all platforms.
-            if let Some(path) = value {
-                let expanded = expand_tilde(path);
-                if expanded.exists() {
-                    return true;
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    if let (Some(home), Some(app_name)) = (dirs::home_dir(), expanded.file_name()) {
-                        // Some apps are installed per-user under ~/Applications instead of /Applications.
-                        return home.join("Applications").join(app_name).exists();
+            // Multiple paths can be separated by "|" to support alternate install locations.
+            if let Some(paths) = value {
+                for path in paths.split('|') {
+                    let expanded = expand_tilde(path.trim());
+                    if expanded.exists() {
+                        return true;
+                    }
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let (Some(home), Some(app_name)) = (dirs::home_dir(), expanded.file_name()) {
+                            // Some apps are installed per-user under ~/Applications instead of /Applications.
+                            if home.join("Applications").join(app_name).exists() {
+                                return true;
+                            }
+                        }
                     }
                 }
                 false
@@ -127,7 +131,7 @@ fn check_installed(kind: &str, value: Option<&str>) -> bool {
                 #[cfg(not(target_os = "windows"))]
                 let lookup_cmd = "which";
 
-                let found_via_lookup = Command::new(lookup_cmd)
+                let found_via_lookup = silent_command(lookup_cmd)
                     .arg(name)
                     .output()
                     .map(|o| o.status.success())
